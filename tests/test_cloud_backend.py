@@ -7,6 +7,15 @@ import cloud_backend
 
 
 class CloudAdapterTest(unittest.TestCase):
+    @patch.dict(os.environ, {'SUPABASE_URL': '  SUPABASE_URL="https://example.supabase.co/"  '})
+    def test_dashboard_wrappers_are_removed_from_project_url(self):
+        self.assertEqual(cloud_backend.supabase_url(), 'https://example.supabase.co')
+
+    @patch.dict(os.environ, {'SUPABASE_URL': 'not a project URL'})
+    def test_invalid_project_url_is_rejected_before_upload(self):
+        with self.assertRaisesRegex(ValueError, 'HTTPS project origin'):
+            cloud_backend.supabase_url()
+
     def test_sql_values_remain_bound_and_ordering_is_portable(self):
         connection = Mock()
         db = cloud_backend.Database(connection)

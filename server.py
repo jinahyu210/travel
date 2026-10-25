@@ -12,6 +12,7 @@ from io import BytesIO
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
+from urllib.error import HTTPError, URLError
 
 ROOT = Path(__file__).resolve().parent
 CLOUD = bool(os.environ.get('VERCEL') or os.environ.get('SUPABASE_DB_URL'))
@@ -273,7 +274,14 @@ class Handler(BaseHTTPRequestHandler):
                 filename = secrets.token_hex(16) + extension
                 if CLOUD:
                     mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'}[extension]
-                    image_url = save_image(filename, raw, mime)
+                    try:
+                        image_url = save_image(filename, raw, mime)
+                    except HTTPError as error:
+                        if error.code in (401, 403):
+                            return self.respond(502, {'error': '사진 저장소 인증 설정을 확인해 주세요.'})
+                        return self.respond(502, {'error': f'사진 저장소 연결 오류가 발생했습니다. ({error.code})'})
+                    except (ValueError, TypeError, URLError):
+                        return self.respond(502, {'error': '사진 저장소 주소 설정을 확인해 주세요.'})
                     image_path = filename
                 else:
                     image_path = DATA / 'images' / filename

@@ -3,6 +3,28 @@ import json
 import os
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from urllib.parse import urlsplit
+
+
+def environment_value(name):
+    """Accept values copied from dashboards without retaining wrappers."""
+    value = os.environ[name].strip()
+    prefix = name + '='
+    if value.startswith(prefix):
+        value = value[len(prefix):].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1].strip()
+    if not value:
+        raise ValueError(f'{name} is empty')
+    return value
+
+
+def supabase_url():
+    value = environment_value('SUPABASE_URL').rstrip('/')
+    parsed = urlsplit(value)
+    if parsed.scheme != 'https' or not parsed.netloc or parsed.path or parsed.query or parsed.fragment:
+        raise ValueError('SUPABASE_URL must be an HTTPS project origin')
+    return value
 
 
 def database():
@@ -30,8 +52,8 @@ class Database:
 
 
 def storage_request(path, data, method='POST', mime='application/json'):
-    key = os.environ['SUPABASE_SERVICE_ROLE_KEY']
-    url = os.environ['SUPABASE_URL'].rstrip('/') + '/storage/v1/' + path
+    key = environment_value('SUPABASE_SERVICE_ROLE_KEY')
+    url = supabase_url() + '/storage/v1/' + path
     request = Request(url, data=data, method=method, headers={
         'Authorization': 'Bearer ' + key, 'apikey': key, 'Content-Type': mime})
     with urlopen(request, timeout=30) as response:
@@ -56,7 +78,7 @@ def save_image(filename, raw, mime):
                 raise
             storage_request('bucket/gallery-artworks', None, 'GET')
     storage_request('object/gallery-artworks/' + filename, raw, mime=mime)
-    return os.environ['SUPABASE_URL'].rstrip('/') + '/storage/v1/object/public/gallery-artworks/' + filename
+    return supabase_url() + '/storage/v1/object/public/gallery-artworks/' + filename
 
 
 def remove_image(filename):

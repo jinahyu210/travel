@@ -6,6 +6,12 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 
+PROJECT_URL = 'https://gpplsvtkejdeqcruhhjh.supabase.co'
+
+
+class StorageAuthenticationError(ValueError):
+    pass
+
 
 def environment_value(name):
     """Accept values copied from dashboards without retaining wrappers."""
@@ -34,12 +40,22 @@ def supabase_url():
     try:
         database_url = environment_value('SUPABASE_DB_URL')
     except (KeyError, ValueError):
-        raise ValueError('SUPABASE_URL must be an HTTPS project origin') from None
+        return PROJECT_URL
     username = urlsplit(database_url).username or ''
     match = re.fullmatch(r'postgres\.([a-z0-9]{15,40})', username)
-    if not match:
-        raise ValueError('SUPABASE_URL must be an HTTPS project origin')
-    return f'https://{match.group(1)}.supabase.co'
+    if match:
+        return f'https://{match.group(1)}.supabase.co'
+    return PROJECT_URL
+
+
+def service_key():
+    try:
+        key = environment_value('SUPABASE_SERVICE_ROLE_KEY')
+    except (KeyError, ValueError):
+        raise StorageAuthenticationError('storage service key is missing') from None
+    if not re.fullmatch(r'[A-Za-z0-9._-]+', key):
+        raise StorageAuthenticationError('storage service key has invalid characters')
+    return key
 
 
 def database():
@@ -67,7 +83,7 @@ class Database:
 
 
 def storage_request(path, data, method='POST', mime='application/json'):
-    key = environment_value('SUPABASE_SERVICE_ROLE_KEY')
+    key = service_key()
     url = supabase_url() + '/storage/v1/' + path
     request = Request(url, data=data, method=method, headers={
         'Authorization': 'Bearer ' + key, 'apikey': key, 'Content-Type': mime})

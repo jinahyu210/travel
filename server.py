@@ -55,7 +55,7 @@ if CLOUD:
     for key in ['SUPABASE_DB_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GALLERY_ADMIN_PASSWORD']:
         if not os.environ.get(key):
             raise RuntimeError(f'Missing required server configuration: {key}')
-    from cloud_backend import database, save_image, remove_image
+    from cloud_backend import database, save_image, remove_image, StorageAuthenticationError
     PASSWORD = os.environ['GALLERY_ADMIN_PASSWORD']
 else:
     DATA = Path(os.environ.get('GALLERY_DATA_DIR', ROOT / '.gallery')).resolve()
@@ -276,6 +276,8 @@ class Handler(BaseHTTPRequestHandler):
                     mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'}[extension]
                     try:
                         image_url = save_image(filename, raw, mime)
+                    except StorageAuthenticationError:
+                        return self.respond(502, {'error': '사진 저장소 인증 설정을 확인해 주세요.'})
                     except HTTPError as error:
                         if error.code in (401, 403):
                             return self.respond(502, {'error': '사진 저장소 인증 설정을 확인해 주세요.'})

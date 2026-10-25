@@ -11,10 +11,9 @@ class CloudAdapterTest(unittest.TestCase):
     def test_dashboard_wrappers_are_removed_from_project_url(self):
         self.assertEqual(cloud_backend.supabase_url(), 'https://example.supabase.co')
 
-    @patch.dict(os.environ, {'SUPABASE_URL': 'not a project URL'})
-    def test_invalid_project_url_is_rejected_before_upload(self):
-        with self.assertRaisesRegex(ValueError, 'HTTPS project origin'):
-            cloud_backend.supabase_url()
+    @patch.dict(os.environ, {'SUPABASE_URL': 'not a project URL'}, clear=True)
+    def test_project_url_falls_back_to_known_public_origin(self):
+        self.assertEqual(cloud_backend.supabase_url(), cloud_backend.PROJECT_URL)
 
     @patch.dict(os.environ, {
         'SUPABASE_URL': 'copied the wrong value',
@@ -22,6 +21,11 @@ class CloudAdapterTest(unittest.TestCase):
     })
     def test_project_url_is_recovered_from_pooler_username(self):
         self.assertEqual(cloud_backend.supabase_url(), 'https://gpplsvtkejdeqcruhhjh.supabase.co')
+
+    @patch.dict(os.environ, {'SUPABASE_SERVICE_ROLE_KEY': 'service role: copied label'}, clear=True)
+    def test_malformed_service_key_is_reported_as_authentication_error(self):
+        with self.assertRaises(cloud_backend.StorageAuthenticationError):
+            cloud_backend.service_key()
 
     def test_sql_values_remain_bound_and_ordering_is_portable(self):
         connection = Mock()

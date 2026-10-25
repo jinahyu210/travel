@@ -33,3 +33,5 @@ body:not(.exhibitions-page){background:#fff}body:not(.exhibitions-page) header{b
 
 body{min-height:100vh;min-height:100svh;display:flex;flex-direction:column}body>header{width:100%;flex-shrink:0;margin-block:0}body>main,#works-view>main,#exhibitions-view>main,#contact-view>main{width:100%;min-width:0;flex:1 0 auto;margin-block:0}#works-view,#exhibitions-view,#contact-view{display:flex;flex-direction:column;flex:1 0 auto;width:100%;min-width:0}footer{width:100%;flex-shrink:0;margin-top:auto!important;margin-bottom:0}.footer-brand .brand-artist{display:inline;font-family:inherit;font-size:.7em;font-weight:400;letter-spacing:inherit;color:inherit;white-space:nowrap}
 .brand>span:last-child,.footer-brand>span:last-child{font-size:10px}
+.series-title>.note-preview{margin-top:auto;margin-bottom:38px}
+@media(max-width:700px){.series-title>.note-preview{margin-top:auto;margin-bottom:28px}}

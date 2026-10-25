@@ -131,6 +131,11 @@
   letter-spacing: -.06em;
 }
 
+#past-exhibitions .archive-year-head h3,
+#past-exhibitions .archive-year-heading h3 {
+  color: #b2b2ae;
+}
+
 .archive-list,
 .archive-year-list {
   width: 100%;
@@ -222,6 +227,24 @@
 .archive-main {
   grid-area: main;
   min-width: 0;
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+@media (min-width: 701px) {
+  .archive-main::before {
+    content: "";
+    position: absolute;
+    top: -20px;
+    bottom: -20px;
+    left: clamp(-21px, -1.2vw, -9px);
+    width: 1px;
+    background: #d8d8d4;
+    pointer-events: none;
+  }
 }
 
 .archive-main h4,

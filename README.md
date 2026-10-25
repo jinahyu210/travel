@@ -44,4 +44,4 @@ node --test tests/test_rules.cjs
 
 ## 공개 배포
 
-Render 배포 설정은 `render.yaml`, 배포 순서는 [DEPLOY.md](DEPLOY.md)를 참고하세요.
+카드 없는 배포 구성은 Vercel Hobby + Supabase Free입니다. 설정은 `vercel.json`, 연결 순서는 [DEPLOY.md](DEPLOY.md)를 참고하세요. 로컬 SQLite 모드도 유지됩니다. Supabase 서버 실행에는 `requirements.txt`의 psycopg가 필요합니다. 이미지 한 장의 업로드 제한은 3MB입니다.

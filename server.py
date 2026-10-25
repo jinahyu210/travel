@@ -12,32 +12,47 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
-DATA = Path(os.environ.get('GALLERY_DATA_DIR', ROOT / '.gallery')).resolve()
-DATA.mkdir(parents=True, exist_ok=True)
-(DATA / 'images').mkdir(exist_ok=True)
-password_file = DATA / 'admin-password'
-if not os.environ.get('GALLERY_ADMIN_PASSWORD') and not password_file.exists():
-    fd = os.open(password_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'w') as f:
-        f.write(secrets.token_urlsafe(24))
-PASSWORD = os.environ.get('GALLERY_ADMIN_PASSWORD') or password_file.read_text().strip()
+CLOUD = bool(os.environ.get('VERCEL') or os.environ.get('SUPABASE_DB_URL'))
+MAX_IMAGE_BYTES = 3_000_000
+if CLOUD:
+    for key in ['SUPABASE_DB_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GALLERY_ADMIN_PASSWORD']:
+        if not os.environ.get(key):
+            raise RuntimeError(f'Missing required server configuration: {key}')
+    from cloud_backend import database, save_image, remove_image
+    PASSWORD = os.environ['GALLERY_ADMIN_PASSWORD']
+else:
+    DATA = Path(os.environ.get('GALLERY_DATA_DIR', ROOT / '.gallery')).resolve()
+    DATA.mkdir(parents=True, exist_ok=True)
+    (DATA / 'images').mkdir(exist_ok=True)
+    password_file = DATA / 'admin-password'
+    if not os.environ.get('GALLERY_ADMIN_PASSWORD') and not password_file.exists():
+        fd = os.open(password_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'w') as f:
+            f.write(secrets.token_urlsafe(24))
+    PASSWORD = os.environ.get('GALLERY_ADMIN_PASSWORD') or password_file.read_text().strip()
+
+    def database():
+        db = sqlite3.connect(DATA / 'gallery.sqlite3')
+        db.row_factory = sqlite3.Row
+        return db
 if not PASSWORD:
     raise RuntimeError('Administrator password must not be empty')
 
-def database():
-    db = sqlite3.connect(DATA / 'gallery.sqlite3')
-    db.row_factory = sqlite3.Row
-    return db
-
 with database() as db:
+    if CLOUD:
+        db.execute('SELECT pg_advisory_xact_lock(73190421)')
     db.execute('CREATE TABLE IF NOT EXISTS series_notes (series TEXT PRIMARY KEY, note TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, name TEXT NOT NULL, reply_to TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)')
     db.execute('CREATE TABLE IF NOT EXISTS exhibitions (id TEXT PRIMARY KEY, title TEXT NOT NULL, venue TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, description TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS artworks (id TEXT PRIMARY KEY, title TEXT NOT NULL, artist TEXT NOT NULL, year TEXT NOT NULL, description TEXT NOT NULL, image TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)')
-    columns = {row['name'] for row in db.execute('PRAGMA table_info(artworks)')}
+    columns = ({row['column_name'] for row in db.execute("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='artworks'")} if CLOUD else {row['name'] for row in db.execute('PRAGMA table_info(artworks)')})
     for column in ['series', 'medium', 'price', 'dimensions', 'canvas_size']:
         if column not in columns:
             db.execute(f"ALTER TABLE artworks ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+    if CLOUD:
+        for table in ['artworks', 'exhibitions', 'series_notes', 'messages']:
+            db.execute(f'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY')
+            db.execute(f'REVOKE ALL ON TABLE {table} FROM anon, authenticated')
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -85,7 +100,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in static:
             name, mime = static[path]
             return self.respond(200, (ROOT / 'static' / name).read_bytes(), mime)
-        if path.startswith('/images/'):
+        if not CLOUD and path.startswith('/images/'):
             name = path.removeprefix('/images/')
             if '/' not in name and name.endswith(('.png', '.jpg', '.webp')):
                 file = DATA / 'images' / name
@@ -122,8 +137,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(401, {'error': '관리자 비밀번호를 확인해 주세요.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
-            if size <= 0 or size > 15_000_000:
-                return self.respond(413, {'error': '이미지는 10MB 이하로 올려 주세요.'})
+            if size <= 0 or size > 4_100_000:
+                return self.respond(413, {'error': '이미지는 3MB 이하로 올려 주세요.'})
             payload = json.loads(self.rfile.read(size))
             if not isinstance(payload, dict):
                 raise ValueError()
@@ -194,7 +209,7 @@ class Handler(BaseHTTPRequestHandler):
             image_url = existing['image'] if existing else None
             if 'image' in payload:
                 raw = base64.b64decode(payload['image'], validate=True)
-                if not raw or len(raw) > 10_000_000:
+                if not raw or len(raw) > MAX_IMAGE_BYTES:
                     raise ValueError()
                 if raw.startswith(b'\x89PNG\r\n\x1a\n'):
                     extension = '.png'
@@ -205,9 +220,14 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     return self.respond(400, {'error': 'JPG, PNG, WebP 이미지만 지원합니다.'})
                 filename = secrets.token_hex(16) + extension
-                image_path = DATA / 'images' / filename
-                image_path.write_bytes(raw)
-                image_url = '/images/' + filename
+                if CLOUD:
+                    mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'}[extension]
+                    image_url = save_image(filename, raw, mime)
+                    image_path = filename
+                else:
+                    image_path = DATA / 'images' / filename
+                    image_path.write_bytes(raw)
+                    image_url = '/images/' + filename
             elif existing is None:
                 raise ValueError()
             artwork_id = existing['id'] if existing else secrets.token_hex(16)
@@ -220,7 +240,10 @@ class Handler(BaseHTTPRequestHandler):
                         db.execute('INSERT INTO artworks (id,title,artist,series,year,medium,price,dimensions,canvas_size,description,image) VALUES (?,?,?,?,?,?,?,?,?,?,?)', (artwork_id,) + values)
             except Exception:
                 if image_path:
-                    image_path.unlink(missing_ok=True)
+                    if CLOUD:
+                        remove_image(image_path)
+                    else:
+                        image_path.unlink(missing_ok=True)
                 raise
             self.respond(200 if existing else 201, {'id': artwork_id})
         except (ValueError, KeyError, TypeError):

@@ -1,6 +1,7 @@
 """Supabase Postgres and Storage adapters; credentials stay on the server."""
 import json
 import os
+import re
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
@@ -20,11 +21,25 @@ def environment_value(name):
 
 
 def supabase_url():
-    value = environment_value('SUPABASE_URL').rstrip('/')
-    parsed = urlsplit(value)
-    if parsed.scheme != 'https' or not parsed.netloc or parsed.path or parsed.query or parsed.fragment:
+    try:
+        value = environment_value('SUPABASE_URL').rstrip('/')
+        parsed = urlsplit(value)
+        if parsed.scheme == 'https' and parsed.netloc and not parsed.path and not parsed.query and not parsed.fragment:
+            return value
+    except (KeyError, ValueError):
+        pass
+
+    # Supabase pooler usernames are `postgres.<project-ref>`. This public
+    # project reference lets us recover safely from a badly copied URL.
+    try:
+        database_url = environment_value('SUPABASE_DB_URL')
+    except (KeyError, ValueError):
+        raise ValueError('SUPABASE_URL must be an HTTPS project origin') from None
+    username = urlsplit(database_url).username or ''
+    match = re.fullmatch(r'postgres\.([a-z0-9]{15,40})', username)
+    if not match:
         raise ValueError('SUPABASE_URL must be an HTTPS project origin')
-    return value
+    return f'https://{match.group(1)}.supabase.co'
 
 
 def database():

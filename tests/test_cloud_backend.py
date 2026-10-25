@@ -16,6 +16,13 @@ class CloudAdapterTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'HTTPS project origin'):
             cloud_backend.supabase_url()
 
+    @patch.dict(os.environ, {
+        'SUPABASE_URL': 'copied the wrong value',
+        'SUPABASE_DB_URL': 'postgresql://postgres.gpplsvtkejdeqcruhhjh:secret@pooler.example.com:6543/postgres'
+    })
+    def test_project_url_is_recovered_from_pooler_username(self):
+        self.assertEqual(cloud_backend.supabase_url(), 'https://gpplsvtkejdeqcruhhjh.supabase.co')
+
     def test_sql_values_remain_bound_and_ordering_is_portable(self):
         connection = Mock()
         db = cloud_backend.Database(connection)

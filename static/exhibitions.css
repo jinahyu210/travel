@@ -207,8 +207,11 @@
 }
 
 .archive-date strong,
-.archive-date time {
+.archive-date time,
+.archive-date span,
+.archive-date small {
   display: block;
+  color: #292929;
   font-size: clamp(19px, 1.7vw, 25px);
   font-weight: 400;
   line-height: 1.1;
@@ -217,11 +220,7 @@
 
 .archive-date span,
 .archive-date small {
-  display: block;
   margin-top: 4px;
-  color: var(--archive-muted);
-  font-size: clamp(16px, 1.45vw, 21px);
-  line-height: 1.1;
 }
 
 .archive-main {
@@ -266,6 +265,8 @@
 
 .archive-status {
   display: inline-block;
+  align-self: flex-start;
+  max-width: 100%;
   margin-top: 12px;
   padding: 3px 6px;
   border: 1px solid #d8d8d5;
@@ -695,15 +696,15 @@
   }
 
   .archive-date strong,
-  .archive-date time {
+  .archive-date time,
+  .archive-date span,
+  .archive-date small {
     font-size: 16px;
   }
 
   .archive-date span,
   .archive-date small {
-    display: block;
     margin: 3px 0 0;
-    font-size: 14px;
   }
 
   .archive-main h4,

@@ -78,13 +78,60 @@ function updateSeriesOptions() {
 }
 $('series-select').addEventListener('change', () => updateNewSeriesField(true));
 $('upload-form').addEventListener('reset', () => queueMicrotask(() => updateNewSeriesField()));
+const canvasSelect = $('upload-form').elements.canvas_size;
+canvasSelect.replaceChildren(new Option('선택', ''), new Option('직접 입력', '비규격'));
+for (const type of ['F', 'P', 'M', 'S']) {
+  const group = document.createElement('optgroup');
+  group.label = {F: 'F · 인물형', P: 'P · 풍경형', M: 'M · 해경형', S: 'S · 정방형'}[type];
+  GalleryRules.canvasFormats.filter(format => format.type === type).forEach(format =>
+    group.append(new Option(format.label, format.label)));
+  canvasSelect.append(group);
+}
+function setCanvasSelection(value) {
+  if (value && ![...canvasSelect.options].some(option => option.value === value)) {
+    const option = new Option(value, value);
+    option.dataset.legacy = 'true';
+    canvasSelect.add(option);
+  }
+  canvasSelect.value = value;
+}
+function updateSwapButton() {
+  const form = $('upload-form');
+  $('swap-dimensions').disabled = !(form.elements.width_cm.valueAsNumber > 0 && form.elements.height_cm.valueAsNumber > 0);
+}
+canvasSelect.addEventListener('change', () => {
+  const form = $('upload-form');
+  const width = form.elements.width_cm, height = form.elements.height_cm;
+  const format = GalleryRules.canvasFormats.find(format => format.label === canvasSelect.value);
+  if (format) {
+    const portrait = width.valueAsNumber < height.valueAsNumber;
+    width.value = portrait ? format.height : format.width;
+    height.value = portrait ? format.width : format.height;
+    updateDimensions();
+  } else if (!canvasSelect.value) {
+    width.value = height.value = '';
+    updateDimensions();
+  } else {
+    width.value = height.value = '';
+    updateDimensions();
+    setCanvasSelection('비규격');
+    width.focus();
+  }
+});
+$('swap-dimensions').addEventListener('click', () => {
+  const form = $('upload-form');
+  const width = form.elements.width_cm, height = form.elements.height_cm;
+  [width.value, height.value] = [height.value, width.value];
+  updateDimensions();
+});
 function updateDimensions() {
   const form = $('upload-form');
   const width = form.elements.width_cm, height = form.elements.height_cm;
   width.setCustomValidity(height.value && !width.value ? '가로를 입력해 주세요.' : '');
   height.setCustomValidity(width.value && !height.value ? '세로를 입력해 주세요.' : '');
   const size = GalleryRules.canvasSize(width.valueAsNumber, height.valueAsNumber);
-  form.elements.canvas_size.value = size;
+  setCanvasSelection(size);
+  updateSwapButton();
   form.elements.dimensions.value = size ? `${width.valueAsNumber} × ${height.valueAsNumber} cm` : '';
 }
 ['width_cm','height_cm'].forEach(name => $('upload-form').elements[name].addEventListener('input', updateDimensions));
@@ -254,6 +301,7 @@ async function load() {
 }
 async function openArtworkForm(artwork = null) {
   const form = $('upload-form');
+  canvasSelect.querySelectorAll('[data-legacy]').forEach(option => option.remove());
   form.reset();
   await Promise.resolve(); // Let reset handlers finish before filling an existing work.
   editingArtwork = artwork;
@@ -272,6 +320,8 @@ async function openArtworkForm(artwork = null) {
       form.elements.width_cm.value = dimensions[1];
       form.elements.height_cm.value = dimensions[2];
     }
+    setCanvasSelection(artwork.canvas_size || '');
+    updateSwapButton();
     $('upload-current-image').src = artwork.image;
   }
   if (window.galleryStore) window.galleryStore.showNotice();

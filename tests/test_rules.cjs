@@ -32,3 +32,12 @@ test('invalid dates never become legitimate exhibitions', () => {
   assert.equal(exhibitionStatus({start_date:'2026-10-25', end_date:'2026-10-24'}), null);
   assert.equal(exhibitionStatus({}), null);
 });
+
+test('every selectable format matches its dimensions in either orientation', () => {
+  const {canvasFormats} = require('../static/gallery-rules.js');
+  assert.equal(new Set(canvasFormats.map(format => format.label)).size, canvasFormats.length);
+  for (const format of canvasFormats) {
+    assert.equal(canvasSize(format.width, format.height), format.label);
+    assert.equal(canvasSize(format.height, format.width), format.label);
+  }
+});

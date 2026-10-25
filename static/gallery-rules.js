@@ -8,6 +8,9 @@
     [30,90.9,72.7,65.2,60.6],[40,100,80.3,72.7,65.2],[50,116.8,91,80.3,72.7],
     [60,130.3,97,89.4,80.3],[80,145.5,112.1,97,89.4],[100,162.2,130.3,112.1,97]
   ];
+  const canvasFormats = sizes.flatMap(([number, width, f, p, m]) =>
+    [['F', f], ['P', p], ['M', m], ['S', width]].map(([type, height]) =>
+      Object.freeze({label: `${number}호 ${type}`, number, type, width, height})));
   function canvasSize(width, height) {
     if (!(Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0)) return '';
     const long = Math.max(width, height), short = Math.min(width, height);
@@ -33,7 +36,7 @@
     const today = seoulDate(now);
     return today > exhibition.end_date ? 'past' : today < exhibition.start_date ? 'upcoming' : 'current';
   }
-  const rules = {canvasSize, seoulDate, validDate, exhibitionStatus};
+  const rules = {canvasFormats: Object.freeze(canvasFormats), canvasSize, seoulDate, validDate, exhibitionStatus};
   if (typeof module !== 'undefined' && module.exports) module.exports = rules;
   else root.GalleryRules = rules;
 })(typeof window === 'undefined' ? globalThis : window);

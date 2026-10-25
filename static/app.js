@@ -13,19 +13,22 @@ function noteFor(name) { return Object.hasOwn(seriesNotes, name) ? seriesNotes[n
 function notePreview(name) {
   const text = noteFor(name);
   if (!text) return null;
-  const button = document.createElement('button'); button.type = 'button'; button.className = 'note-preview';
-  button.setAttribute('aria-label', name + ' 작가노트 전체보기');
+  const preview = document.createElement('div'); preview.className = 'note-preview';
   const label = document.createElement('span'); label.className = 'note-label'; label.textContent = '작가노트';
   const excerpt = document.createElement('span'); excerpt.className = 'note-excerpt'; excerpt.textContent = text;
-  button.append(label, excerpt);
-  button.addEventListener('click', () => openArtistNote(name, button));
-  return button;
+  preview.append(label, excerpt);
+  return preview;
 }
 function updateSeriesNote() {
   const slot = $('series-note-slot'); slot.replaceChildren();
-  const preview = activeSeries !== null ? notePreview(activeSeries) : null;
-  slot.hidden = !preview;
-  if (preview) slot.append(preview);
+  const text = activeSeries !== null ? noteFor(activeSeries) : '';
+  slot.hidden = !text;
+  if (text) {
+    const note = document.createElement('section'); note.className = 'series-note-full';
+    const label = document.createElement('span'); label.className = 'note-label'; label.textContent = '작가노트';
+    const body = document.createElement('p'); body.className = 'series-note-text'; body.textContent = text;
+    note.append(label, body); slot.append(note);
+  }
 }
 function openArtistNote(name, trigger) {
   noteSeries = name; noteTrigger = trigger; noteScroll = window.scrollY;

@@ -33,5 +33,11 @@ body:not(.exhibitions-page){background:#fff}body:not(.exhibitions-page) header{b
 
 body{min-height:100vh;min-height:100svh;display:flex;flex-direction:column}body>header{width:100%;flex-shrink:0;margin-block:0}body>main,#works-view>main,#exhibitions-view>main,#contact-view>main{width:100%;min-width:0;flex:1 0 auto;margin-block:0}#works-view,#exhibitions-view,#contact-view{display:flex;flex-direction:column;flex:1 0 auto;width:100%;min-width:0}footer{width:100%;flex-shrink:0;margin-top:auto!important;margin-bottom:0}.footer-brand .brand-artist{display:inline;font-family:inherit;font-size:.7em;font-weight:400;letter-spacing:inherit;color:inherit;white-space:nowrap}
 .brand>span:last-child,.footer-brand>span:last-child{font-size:10px}
-.series-title>.note-preview{margin-top:auto;margin-bottom:38px}
-@media(max-width:700px){.series-title>.note-preview{margin-top:auto;margin-bottom:28px}}
+.series-title>.note-preview{display:flex;flex:1;min-height:0;flex-direction:column;margin-top:30px;margin-bottom:0;padding-right:4px}
+.series-title>.note-preview .note-excerpt{flex:1;max-height:none;padding-bottom:34px;mask-image:linear-gradient(to bottom,#000 48%,transparent 94%);-webkit-mask-image:linear-gradient(to bottom,#000 48%,transparent 94%)}
+.series-title>.note-preview{pointer-events:none}
+.series-title .series-arrow{z-index:3}
+#series-note-slot{max-width:900px}
+.series-note-text{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:#444;font-size:15px;line-height:2;mask-image:none;-webkit-mask-image:none}
+@media(max-width:700px){.series-title>.note-preview{margin-top:22px;margin-bottom:0}.series-title>.note-preview .note-excerpt{max-height:none;padding-bottom:28px}}
+@media(max-width:700px){.series-note-text{font-size:13px;line-height:1.9}}

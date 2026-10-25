@@ -39,5 +39,6 @@ body{min-height:100vh;min-height:100svh;display:flex;flex-direction:column}body>
 .series-title .series-arrow{z-index:3}
 #series-note-slot{max-width:1020px}
 .series-note-text{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:#444;font-size:15px;line-height:2;mask-image:none;-webkit-mask-image:none}
+#series-gallery>.card{flex-basis:clamp(320px,40vw,900px)}
 @media(max-width:700px){.series-title>.note-preview{margin-top:28px;margin-bottom:0}.series-title>.note-preview .note-excerpt{max-height:none;padding-bottom:28px}}
-@media(max-width:700px){.series-note-text{font-size:13px;line-height:1.9}}
+@media(max-width:700px){.series-note-text{font-size:13px;line-height:1.9}#series-gallery>.card{flex-basis:70vw}}

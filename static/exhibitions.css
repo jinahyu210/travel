@@ -195,6 +195,8 @@
 .archive-date {
   grid-area: date;
   align-self: center;
+  width: max-content;
+  text-align: right;
   color: #292929;
   font-variant-numeric: tabular-nums;
 }
@@ -211,10 +213,10 @@
 .archive-date span,
 .archive-date small {
   display: block;
-  margin-top: 8px;
+  margin-top: 4px;
   color: var(--archive-muted);
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: clamp(12px, 1.1vw, 15px);
+  line-height: 1.1;
 }
 
 .archive-main {
@@ -248,6 +250,23 @@
   font-size: 8px;
   line-height: 1.2;
   letter-spacing: .04em;
+}
+
+.archive-status-current,
+.exhibition-detail-status-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.archive-status-current::before,
+.exhibition-detail-status-current::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: #3f7d5d;
 }
 
 .archive-summary {
@@ -634,9 +653,9 @@
 
   .archive-date span,
   .archive-date small {
-    display: inline;
-    margin: 0 0 0 8px;
-    font-size: 9px;
+    display: block;
+    margin: 3px 0 0;
+    font-size: 11px;
   }
 
   .archive-main h4,

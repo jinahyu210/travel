@@ -30,12 +30,10 @@
   function archiveDate(item) {
     const date = element('time', 'archive-date');
     date.dateTime = item.start_date;
-    const start = item.start_date.split('-');
-    const end = item.end_date.split('-');
-    const crossesYear = start[0] !== end[0];
+    const [year, month, day] = item.start_date.split('-');
     date.append(
-      element('strong', '', `${start[1]}.${start[2]}`),
-      element('span', '', `— ${crossesYear ? dottedDate(item.end_date) : `${end[1]}.${end[2]}`}`)
+      element('strong', '', `${month}.${day}`),
+      element('span', '', year.slice(-2))
     );
     return date;
   }
@@ -54,7 +52,9 @@
       image.alt = '';
     }
     document.getElementById('exhibition-detail-title').textContent = item.title;
-    document.getElementById('exhibition-detail-status').textContent = statusLabels[status];
+    const statusLabel = document.getElementById('exhibition-detail-status');
+    statusLabel.className = `exhibition-detail-status exhibition-detail-status-${status}`;
+    statusLabel.textContent = statusLabels[status];
     document.getElementById('exhibition-detail-venue').textContent = item.venue;
     document.getElementById('exhibition-detail-period').textContent = displayPeriod(item);
     const description = document.getElementById('exhibition-detail-description');

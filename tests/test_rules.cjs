@@ -41,3 +41,26 @@ test('every selectable format matches its dimensions in either orientation', () 
     assert.equal(canvasSize(format.height, format.width), format.label);
   }
 });
+
+test('dropdown dimensions match the Korean 0–100 canvas chart exactly', () => {
+  const {canvasFormats} = require('../static/gallery-rules.js');
+  const rows = [
+    [0,18,14,12,10],[1,22.7,15.8,14,12],[2,25.8,17.9,16,14],[3,27.3,22,19,16],
+    [4,33.4,24.2,21.2,19],[5,34.8,27.3,24.2,21.2],[6,40.9,31.8,27.3,24.2],
+    [8,45.5,37.9,33.4,27.3],[10,53,45.5,40.9,33.4],[12,60.6,50,45.5,40.9],
+    [15,65.1,53,50,45.5],[20,72.7,60.6,53,50],[25,80.3,65.1,60.6,53],
+    [30,90.9,72.7,65.1,60.6],[40,100,80.3,72.7,65.1],[50,116.8,91,80.3,72.7],
+    [60,130.3,97,89.4,80.3],[80,145.5,112.1,97,89.4],[100,162.2,130.3,112.1,97]
+  ];
+  const expected = rows.flatMap(([number,long,f,p,m]) =>
+    [['F',f],['P',p],['M',m],['S',long]].map(([type,short]) =>
+      [`${number}호 ${type}`,long,short]));
+  assert.deepEqual(canvasFormats.map(({label,width,height}) => [label,width,height]), expected);
+});
+
+test('legacy manufacturer rounding still resolves to the corrected size', () => {
+  assert.equal(canvasSize(65.2, 53), '15호 F');
+  assert.equal(canvasSize(80.3, 65.2), '25호 F');
+  assert.equal(canvasSize(22.7, 13.9), '1호 P');
+  assert.equal(canvasSize(25.8, 13.9), '2호 M');
+});

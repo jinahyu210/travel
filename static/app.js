@@ -268,12 +268,11 @@ function render() {
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(a);
   });
-  let index = 0;
   groups.forEach((works, name) => {
     const panel = document.createElement('section'); panel.className = 'series-title';
     const link = document.createElement('button'); link.type = 'button'; link.className = 'series-title-link';
     link.setAttribute('aria-label', `${name} 시리즈 보기`);
-    const number = document.createElement('span'); number.className = 'series-index'; number.textContent = String(++index).padStart(2, '0');
+    const number = document.createElement('span'); number.className = 'series-index'; number.textContent = '시리즈';
     const title = document.createElement('h3'); title.textContent = name;
     const arrow = document.createElement('span'); arrow.className = 'series-arrow'; arrow.textContent = '↗'; arrow.setAttribute('aria-hidden', 'true');
     link.append(title,arrow); panel.append(number,link);

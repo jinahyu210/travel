@@ -7,7 +7,7 @@ class handler(Handler):
     def dispatch(self, method):
         route = parse_qs(urlsplit(self.path).query).get('route', [None])[0]
         if route is not None:
-            self.path = '/api/' + route
+            self.path = '/api/' + route.strip('/')
         try:
             method(self)
         except Exception:

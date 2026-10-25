@@ -162,3 +162,49 @@ label small {
     font-size: 14px;
   }
 }
+
+/* Keep the shared page frame aligned across Works, Exhibitions, and Contact. */
+:root {
+  --page-gutter: 5vw;
+  --page-rule: #e9e9e9;
+}
+
+body > header,
+body > footer,
+body:not(.exhibitions-page) .intro,
+.collection-head,
+.collection-bottom,
+#status,
+.series-view-heading,
+.series-view-bottom {
+  padding-inline: var(--page-gutter);
+}
+
+#grid,
+#series-title,
+#series-note-slot,
+.contact-panel {
+  margin-inline: var(--page-gutter);
+}
+
+#series-gallery {
+  padding-inline: var(--page-gutter);
+  scroll-padding-inline: var(--page-gutter);
+}
+
+#grid,
+.contact-panel {
+  border-color: var(--page-rule);
+}
+
+@media(min-width:1600px) {
+  :root {
+    --page-gutter: 80px;
+  }
+}
+
+@media(max-width:700px) {
+  :root {
+    --page-gutter: 24px;
+  }
+}

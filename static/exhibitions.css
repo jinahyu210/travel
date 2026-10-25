@@ -20,7 +20,19 @@
 
 .exhibitions-page .exhibition-intro {
   margin: 0;
-  border-bottom: 1px solid var(--archive-line);
+  position: relative;
+  border-bottom: 0;
+  padding-inline: var(--page-gutter);
+}
+
+.exhibitions-page .exhibition-intro::after {
+  content: "";
+  position: absolute;
+  right: var(--page-gutter);
+  bottom: 0;
+  left: var(--page-gutter);
+  height: 1px;
+  background: var(--page-rule);
 }
 
 .exhibition-section {
@@ -28,7 +40,7 @@
 }
 
 .archive-section {
-  margin-inline: 5vw;
+  margin-inline: var(--page-gutter);
   padding: 0 0 72px;
 }
 
@@ -622,12 +634,6 @@
   color: #444;
 }
 
-@media (min-width: 1600px) {
-  .archive-section {
-    margin-inline: 80px;
-  }
-}
-
 @media (max-width: 900px) {
   .archive-row {
     grid-template-columns: 92px 78px minmax(170px, 1fr) minmax(190px, 1fr) 22px;
@@ -641,11 +647,10 @@
 
 @media (max-width: 700px) {
   .exhibitions-page .exhibition-intro {
-    padding-bottom: 28px;
+    padding-bottom: 26px;
   }
 
   .archive-section {
-    margin-inline: 24px;
     padding-bottom: 50px;
   }
 

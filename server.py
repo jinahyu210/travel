@@ -1,0 +1,232 @@
+"""Small, dependency-free gallery. Run with Python 3.12+."""
+import base64
+import hashlib
+import hmac
+import json
+import os
+from pathlib import Path
+import secrets
+import sqlite3
+from datetime import date
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
+
+ROOT = Path(__file__).resolve().parent
+DATA = Path(os.environ.get('GALLERY_DATA_DIR', ROOT / '.gallery')).resolve()
+DATA.mkdir(parents=True, exist_ok=True)
+(DATA / 'images').mkdir(exist_ok=True)
+password_file = DATA / 'admin-password'
+if not os.environ.get('GALLERY_ADMIN_PASSWORD') and not password_file.exists():
+    fd = os.open(password_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write(secrets.token_urlsafe(24))
+PASSWORD = os.environ.get('GALLERY_ADMIN_PASSWORD') or password_file.read_text().strip()
+if not PASSWORD:
+    raise RuntimeError('Administrator password must not be empty')
+
+def database():
+    db = sqlite3.connect(DATA / 'gallery.sqlite3')
+    db.row_factory = sqlite3.Row
+    return db
+
+with database() as db:
+    db.execute('CREATE TABLE IF NOT EXISTS series_notes (series TEXT PRIMARY KEY, note TEXT NOT NULL)')
+    db.execute('CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, name TEXT NOT NULL, reply_to TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)')
+    db.execute('CREATE TABLE IF NOT EXISTS exhibitions (id TEXT PRIMARY KEY, title TEXT NOT NULL, venue TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, description TEXT NOT NULL)')
+    db.execute('CREATE TABLE IF NOT EXISTS artworks (id TEXT PRIMARY KEY, title TEXT NOT NULL, artist TEXT NOT NULL, year TEXT NOT NULL, description TEXT NOT NULL, image TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)')
+    columns = {row['name'] for row in db.execute('PRAGMA table_info(artworks)')}
+    for column in ['series', 'medium', 'price', 'dimensions', 'canvas_size']:
+        if column not in columns:
+            db.execute(f"ALTER TABLE artworks ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        # Do not log request headers, passwords, or image data.
+        super().log_message(fmt, *args)
+
+    def respond(self, status, body, content_type='application/json; charset=utf-8'):
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body, ensure_ascii=False).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        path = urlsplit(self.path).path
+        if path == '/api/series-notes':
+            with database() as db:
+                notes = {row['series']: row['note'] for row in db.execute('SELECT series,note FROM series_notes')}
+            return self.respond(200, notes)
+        if path == '/api/messages':
+            supplied = self.headers.get('Authorization', '').removeprefix('Bearer ')
+            if not hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), hashlib.sha256(PASSWORD.encode()).digest()):
+                return self.respond(401, {'error': '관리자 비밀번호를 확인해 주세요.'})
+            with database() as db:
+                rows = [dict(row) for row in db.execute('SELECT * FROM messages ORDER BY created_at DESC, rowid DESC')]
+            return self.respond(200, rows)
+        if path == '/api/exhibitions':
+            with database() as db:
+                rows = [dict(row) for row in db.execute('SELECT * FROM exhibitions ORDER BY start_date DESC, rowid DESC')]
+            return self.respond(200, rows)
+        if path == '/api/artworks':
+            with database() as db:
+                rows = [dict(row) for row in db.execute('SELECT * FROM artworks ORDER BY created_at DESC, rowid DESC')]
+            return self.respond(200, rows)
+        static = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
+        static.update({'/exhibitions': ('exhibitions.html', 'text/html; charset=utf-8'), '/exhibitions.html': ('exhibitions.html', 'text/html; charset=utf-8'), '/exhibitions.css': ('exhibitions.css', 'text/css; charset=utf-8')})
+        static.update({f'/{name}': (name, 'text/javascript; charset=utf-8') for name in ['gallery-rules.js', 'exhibitions.js']})
+        static.update({'/contact': ('contact.html', 'text/html; charset=utf-8'), '/contact.html': ('contact.html', 'text/html; charset=utf-8')})
+        static['/contact.js'] = ('contact.js', 'text/javascript; charset=utf-8')
+        if path in static:
+            name, mime = static[path]
+            return self.respond(200, (ROOT / 'static' / name).read_bytes(), mime)
+        if path.startswith('/images/'):
+            name = path.removeprefix('/images/')
+            if '/' not in name and name.endswith(('.png', '.jpg', '.webp')):
+                file = DATA / 'images' / name
+                if file.is_file():
+                    return self.respond(200, file.read_bytes(), {'.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'}[file.suffix])
+        self.respond(404, {'error': '찾을 수 없습니다.'})
+
+    def do_POST(self):
+        if self.path == '/api/messages':
+            try:
+                size = int(self.headers.get('Content-Length', '0'))
+                if size <= 0 or size > 32000:
+                    return self.respond(413, {'error': '메모는 4,000자 이내로 작성해 주세요.'})
+                payload = json.loads(self.rfile.read(size))
+                if not isinstance(payload, dict):
+                    raise ValueError()
+                fields = {}
+                for key, limit in [('name', 80), ('reply_to', 200), ('message', 4000)]:
+                    value = payload.get(key, '')
+                    if not isinstance(value, str) or len(value) > limit:
+                        raise ValueError()
+                    fields[key] = value.strip()
+                if not fields['message']:
+                    raise ValueError()
+                with database() as db:
+                    db.execute('INSERT INTO messages (id,name,reply_to,message) VALUES (?,?,?,?)', (secrets.token_hex(16), fields['name'], fields['reply_to'], fields['message']))
+                return self.respond(201, {'status': 'received'})
+            except (ValueError, KeyError, TypeError):
+                return self.respond(400, {'error': '메모 내용을 확인해 주세요. 최대 4,000자까지 입력할 수 있습니다.'})
+        if self.path not in ['/api/artworks', '/api/artworks/update', '/api/series/rename', '/api/exhibitions', '/api/series-notes']:
+            return self.respond(404, {'error': '찾을 수 없습니다.'})
+        supplied = self.headers.get('Authorization', '').removeprefix('Bearer ')
+        if not hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), hashlib.sha256(PASSWORD.encode()).digest()):
+            return self.respond(401, {'error': '관리자 비밀번호를 확인해 주세요.'})
+        try:
+            size = int(self.headers.get('Content-Length', '0'))
+            if size <= 0 or size > 15_000_000:
+                return self.respond(413, {'error': '이미지는 10MB 이하로 올려 주세요.'})
+            payload = json.loads(self.rfile.read(size))
+            if not isinstance(payload, dict):
+                raise ValueError()
+            if self.path == '/api/series-notes':
+                series, note = payload.get('series'), payload.get('note')
+                if not isinstance(series, str) or not series.strip() or len(series) > 120 or not isinstance(note, str) or len(note) > 20000:
+                    return self.respond(400, {'error': '시리즈를 선택하고 작가노트를 20,000자 이내로 입력해 주세요.'})
+                series = series.strip()
+                with database() as db:
+                    if not db.execute("SELECT 1 FROM artworks WHERE COALESCE(NULLIF(trim(series),''),'Works')=?", (series,)).fetchone():
+                        return self.respond(404, {'error': '해당 시리즈를 찾을 수 없습니다.'})
+                    db.execute('INSERT INTO series_notes (series,note) VALUES (?,?) ON CONFLICT(series) DO UPDATE SET note=excluded.note', (series, note.strip()))
+                return self.respond(200, {'series': series})
+            if self.path == '/api/exhibitions':
+                exhibition = {}
+                for key, limit in [('title', 200), ('venue', 200), ('start_date', 10), ('end_date', 10), ('description', 2000)]:
+                    value = payload.get(key, '')
+                    if not isinstance(value, str) or len(value) > limit:
+                        return self.respond(400, {'error': '전시 정보를 확인해 주세요.'})
+                    exhibition[key] = value.strip()
+                try:
+                    start = date.fromisoformat(exhibition['start_date'])
+                    end = date.fromisoformat(exhibition['end_date'])
+                    valid = start.isoformat() == exhibition['start_date'] and end.isoformat() == exhibition['end_date'] and start <= end
+                except ValueError:
+                    valid = False
+                if not valid or not exhibition['title'] or not exhibition['venue']:
+                    return self.respond(400, {'error': '전시명, 장소와 올바른 시작일·종료일을 입력해 주세요.'})
+                identifier = secrets.token_hex(16)
+                with database() as db:
+                    db.execute('INSERT INTO exhibitions (id,title,venue,start_date,end_date,description) VALUES (?,?,?,?,?,?)', (identifier, exhibition['title'], exhibition['venue'], exhibition['start_date'], exhibition['end_date'], exhibition['description']))
+                return self.respond(201, {'id': identifier})
+            if self.path == '/api/series/rename':
+                source, target = payload.get('source'), payload.get('target')
+                if not isinstance(source, str) or not isinstance(target, str) or len(source) > 120 or len(target) > 120 or not target.strip():
+                    return self.respond(400, {'error': '새 시리즈 제목을 120자 이내로 입력해 주세요.'})
+                source, target = source.strip(), target.strip()
+                with database() as db:
+                    if not db.execute('SELECT 1 FROM artworks WHERE trim(series)=?', (source,)).fetchone():
+                        return self.respond(404, {'error': '해당 시리즈를 찾을 수 없습니다.'})
+                    if source != target and db.execute('SELECT 1 FROM artworks WHERE trim(series)=?', (target,)).fetchone():
+                        return self.respond(409, {'error': '이미 있는 시리즈 제목입니다. 다른 이름을 입력해 주세요.'})
+                    note_source = source or 'Works'
+                    if note_source != target and db.execute('SELECT 1 FROM series_notes WHERE series=?', (note_source,)).fetchone():
+                        if db.execute('SELECT 1 FROM series_notes WHERE series=?', (target,)).fetchone():
+                            return self.respond(409, {'error': '같은 이름의 작가노트가 있습니다. 다른 시리즈 이름을 입력해 주세요.'})
+                        db.execute('UPDATE series_notes SET series=? WHERE series=?', (target, note_source))
+                    db.execute('UPDATE artworks SET series=? WHERE trim(series)=?', (target, source))
+                return self.respond(200, {'series': target})
+            fields = {}
+            for key, limit in [('title', 120), ('artist', 120), ('series', 120), ('year', 20), ('medium', 160), ('price', 80), ('dimensions', 120), ('canvas_size', 40), ('description', 2000)]:
+                value = payload.get(key, '')
+                if not isinstance(value, str) or len(value) > limit:
+                    raise ValueError()
+                fields[key] = value.strip()
+            if not fields['title'] or not fields['artist']:
+                raise ValueError()
+            existing = None
+            if self.path == '/api/artworks/update':
+                identifier = payload.get('id')
+                if not isinstance(identifier, str) or not identifier or len(identifier) > 100:
+                    return self.respond(400, {'error': '수정할 작품을 확인해 주세요.'})
+                with database() as db:
+                    existing = db.execute('SELECT * FROM artworks WHERE id=?', (identifier,)).fetchone()
+                if existing is None:
+                    return self.respond(404, {'error': '수정할 작품을 찾을 수 없습니다.'})
+            image_path = None
+            image_url = existing['image'] if existing else None
+            if 'image' in payload:
+                raw = base64.b64decode(payload['image'], validate=True)
+                if not raw or len(raw) > 10_000_000:
+                    raise ValueError()
+                if raw.startswith(b'\x89PNG\r\n\x1a\n'):
+                    extension = '.png'
+                elif raw.startswith(b'\xff\xd8\xff'):
+                    extension = '.jpg'
+                elif raw.startswith(b'RIFF') and raw[8:12] == b'WEBP':
+                    extension = '.webp'
+                else:
+                    return self.respond(400, {'error': 'JPG, PNG, WebP 이미지만 지원합니다.'})
+                filename = secrets.token_hex(16) + extension
+                image_path = DATA / 'images' / filename
+                image_path.write_bytes(raw)
+                image_url = '/images/' + filename
+            elif existing is None:
+                raise ValueError()
+            artwork_id = existing['id'] if existing else secrets.token_hex(16)
+            values = (fields['title'], fields['artist'], fields['series'], fields['year'], fields['medium'], fields['price'], fields['dimensions'], fields['canvas_size'], fields['description'], image_url)
+            try:
+                with database() as db:
+                    if existing:
+                        db.execute('UPDATE artworks SET title=?,artist=?,series=?,year=?,medium=?,price=?,dimensions=?,canvas_size=?,description=?,image=? WHERE id=?', values + (artwork_id,))
+                    else:
+                        db.execute('INSERT INTO artworks (id,title,artist,series,year,medium,price,dimensions,canvas_size,description,image) VALUES (?,?,?,?,?,?,?,?,?,?,?)', (artwork_id,) + values)
+            except Exception:
+                if image_path:
+                    image_path.unlink(missing_ok=True)
+                raise
+            self.respond(200 if existing else 201, {'id': artwork_id})
+        except (ValueError, KeyError, TypeError):
+            self.respond(400, {'error': '작품명, 작가명과 올바른 이미지를 입력해 주세요.'})
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', '3000'))
+    print(f'Gallery listening on port {port}', flush=True)
+    ThreadingHTTPServer(('0.0.0.0', port), Handler).serve_forever()

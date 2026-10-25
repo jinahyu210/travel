@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: mari-park-gallery
+    runtime: python
+    plan: starter
+    buildCommand: python -m compileall -q server.py
+    startCommand: python server.py
+    healthCheckPath: /api/exhibitions
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: GALLERY_DATA_DIR
+        value: /var/data/gallery
+      - key: GALLERY_ADMIN_PASSWORD
+        sync: false
+    disk:
+      name: gallery-data
+      mountPath: /var/data
+      sizeGB: 1

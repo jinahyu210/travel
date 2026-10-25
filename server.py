@@ -257,7 +257,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not raw or len(raw) > MAX_IMAGE_BYTES:
                     return self.respond(400, {'error': '이미지는 3MB 이하로 올려 주세요.'})
                 if is_heif(raw):
-                    raw = convert_heif(raw)
+                    try:
+                        raw = convert_heif(raw)
+                    except (OSError, ValueError):
+                        return self.respond(400, {'error': 'HEIC 이미지를 변환하지 못했습니다. 원본 사진을 다시 선택해 주세요.'})
                     extension = '.jpg'
                 elif raw.startswith(b'\x89PNG\r\n\x1a\n'):
                     extension = '.png'

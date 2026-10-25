@@ -408,7 +408,8 @@ $('search').addEventListener('input', render);
 $('upload-form').addEventListener('submit', async event => {
   event.preventDefault(); const form = event.currentTarget; const submit = form.querySelector('[type=submit]');
   $('upload-status').textContent = ''; const file = form.elements.file.files[0];
-  if ((!file && !editingArtwork) || (file && file.size > 3_000_000)) { $('upload-status').textContent = '3MB 이하 이미지를 선택해 주세요.'; return; }
+  if (!file && !editingArtwork) { $('upload-status').textContent = '작품 이미지를 선택해 주세요.'; return; }
+  if (file && file.size > 3_000_000) { $('upload-status').textContent = '이미지는 3MB 이하로 올려 주세요.'; return; }
   submit.disabled = true;
   try {
     const payload = {};

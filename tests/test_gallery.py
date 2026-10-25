@@ -12,6 +12,8 @@ import unittest
 import urllib.error
 import urllib.request
 
+from server import is_heif
+
 ROOT = Path(__file__).resolve().parents[1]
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+afoQAAAAASUVORK5CYII=')
 
@@ -56,6 +58,12 @@ class GalleryTest(unittest.TestCase):
 
     def artwork(self, **changes):
         return dict(title='고요한 아침', artist='김화가', year='2026', description='<script>untrusted</script>', image=base64.b64encode(PNG).decode(), **changes)
+
+    def test_heic_container_detection_does_not_trust_extension(self):
+        self.assertTrue(is_heif(b'\x00\x00\x00\x18ftypheic' + b'\x00' * 12))
+        self.assertTrue(is_heif(b'\x00\x00\x00\x18ftypmif1' + b'\x00' * 12))
+        self.assertFalse(is_heif(PNG))
+        self.assertFalse(is_heif(b'not really a heic'))
 
     def test_admin_upload_public_read_and_restart(self):
         payload = self.artwork()

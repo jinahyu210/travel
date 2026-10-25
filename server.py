@@ -1,5 +1,6 @@
 """Small, dependency-free gallery. Run with Python 3.12+."""
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -7,6 +8,7 @@ import os
 from pathlib import Path
 import secrets
 import sqlite3
+from io import BytesIO
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
@@ -14,6 +16,40 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parent
 CLOUD = bool(os.environ.get('VERCEL') or os.environ.get('SUPABASE_DB_URL'))
 MAX_IMAGE_BYTES = 3_000_000
+
+def is_heif(raw):
+    """Recognize HEIC/HEIF containers without trusting the file extension."""
+    return (len(raw) >= 12 and raw[4:8] == b'ftyp' and
+            raw[8:12] in {b'heic', b'heix', b'hevc', b'hevx', b'heim', b'heis', b'mif1', b'msf1'})
+
+def convert_heif(raw):
+    """Convert HEIC/HEIF to a browser-safe JPEG within the storage limit."""
+    from PIL import Image, ImageOps
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    Image.MAX_IMAGE_PIXELS = 60_000_000
+    with Image.open(BytesIO(raw)) as source:
+        source.load()
+        image = ImageOps.exif_transpose(source)
+        if image.mode != 'RGB':
+            if 'A' in image.getbands():
+                background = Image.new('RGB', image.size, 'white')
+                background.paste(image, mask=image.getchannel('A'))
+                image = background
+            else:
+                image = image.convert('RGB')
+        for quality in (90, 85, 80, 75, 68):
+            output = BytesIO()
+            image.save(output, 'JPEG', quality=quality, optimize=True)
+            if output.tell() <= MAX_IMAGE_BYTES:
+                return output.getvalue()
+        image.thumbnail((4000, 4000))
+        output = BytesIO()
+        image.save(output, 'JPEG', quality=75, optimize=True)
+        converted = output.getvalue()
+        if len(converted) > MAX_IMAGE_BYTES:
+            raise ValueError('converted image is too large')
+        return converted
 if CLOUD:
     for key in ['SUPABASE_DB_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GALLERY_ADMIN_PASSWORD']:
         if not os.environ.get(key):
@@ -67,7 +103,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body)))
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Cache-Control', 'no-store')
-        self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+        image_source = urlsplit(os.environ.get('SUPABASE_URL', '')).netloc
+        remote_images = f' https://{image_source}' if CLOUD and image_source else ''
+        self.send_header('Content-Security-Policy', f"default-src 'self'; img-src 'self' blob:{remote_images}; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
         self.end_headers()
         self.wfile.write(body)
 
@@ -194,8 +232,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(value, str) or len(value) > limit:
                     raise ValueError()
                 fields[key] = value.strip()
-            if not fields['title'] or not fields['artist']:
-                raise ValueError()
+            if not fields['title']:
+                return self.respond(400, {'error': '작품명을 입력해 주세요.'})
+            if not fields['artist']:
+                return self.respond(400, {'error': '작가명을 확인해 주세요.'})
             existing = None
             if self.path == '/api/artworks/update':
                 identifier = payload.get('id')
@@ -208,17 +248,25 @@ class Handler(BaseHTTPRequestHandler):
             image_path = None
             image_url = existing['image'] if existing else None
             if 'image' in payload:
-                raw = base64.b64decode(payload['image'], validate=True)
+                if not isinstance(payload['image'], str):
+                    return self.respond(400, {'error': '이미지 파일을 다시 선택해 주세요.'})
+                try:
+                    raw = base64.b64decode(payload['image'], validate=True)
+                except (binascii.Error, ValueError):
+                    return self.respond(400, {'error': '이미지 파일을 읽지 못했습니다. 다시 선택해 주세요.'})
                 if not raw or len(raw) > MAX_IMAGE_BYTES:
-                    raise ValueError()
-                if raw.startswith(b'\x89PNG\r\n\x1a\n'):
+                    return self.respond(400, {'error': '이미지는 3MB 이하로 올려 주세요.'})
+                if is_heif(raw):
+                    raw = convert_heif(raw)
+                    extension = '.jpg'
+                elif raw.startswith(b'\x89PNG\r\n\x1a\n'):
                     extension = '.png'
                 elif raw.startswith(b'\xff\xd8\xff'):
                     extension = '.jpg'
                 elif raw.startswith(b'RIFF') and raw[8:12] == b'WEBP':
                     extension = '.webp'
                 else:
-                    return self.respond(400, {'error': 'JPG, PNG, WebP 이미지만 지원합니다.'})
+                    return self.respond(400, {'error': 'JPG, PNG, WebP, HEIC 이미지만 지원합니다.'})
                 filename = secrets.token_hex(16) + extension
                 if CLOUD:
                     mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'}[extension]
@@ -229,7 +277,7 @@ class Handler(BaseHTTPRequestHandler):
                     image_path.write_bytes(raw)
                     image_url = '/images/' + filename
             elif existing is None:
-                raise ValueError()
+                return self.respond(400, {'error': '작품 이미지를 선택해 주세요.'})
             artwork_id = existing['id'] if existing else secrets.token_hex(16)
             values = (fields['title'], fields['artist'], fields['series'], fields['year'], fields['medium'], fields['price'], fields['dimensions'], fields['canvas_size'], fields['description'], image_url)
             try:

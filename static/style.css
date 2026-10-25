@@ -42,3 +42,123 @@ body{min-height:100vh;min-height:100svh;display:flex;flex-direction:column}body>
 #series-gallery>.card{flex-basis:min(70vw,65svh)}
 @media(max-width:700px){.series-title>.note-preview{margin-top:28px;margin-bottom:0}.series-title>.note-preview .note-excerpt{max-height:none;padding-bottom:28px}}
 @media(max-width:700px){.series-note-text{font-size:13px;line-height:1.9}}
+
+/* Keep supporting information readable across every page. */
+.quiet,
+.site-nav a,
+.site-nav .quiet,
+#series-back,
+.collection-head h2,
+.collection-head h2 small,
+#search,
+.series-index,
+#series-count,
+.collection-bottom p {
+  font-size: 12px;
+}
+
+.brand > span:last-child,
+.footer-brand > span:last-child,
+body:not(.exhibitions-page) .intro h1 span,
+.exhibition-intro h1 span {
+  font-size: 12px;
+}
+
+#grid .card-caption h3,
+#grid .card-caption p {
+  font-size: 12px;
+}
+
+#series-gallery .card-caption h3 {
+  font-size: 15px;
+}
+
+#series-gallery .card-caption p,
+.note-excerpt {
+  font-size: 13px;
+}
+
+.note-label,
+.eyebrow {
+  font-size: 12px;
+}
+
+label,
+.muted,
+label small {
+  font-size: 13px;
+}
+
+#detail-metadata,
+#detail-description {
+  font-size: 14px;
+}
+
+.footer-brand span,
+.footer-copyright {
+  font-size: 12px;
+}
+
+#contact-details {
+  font-size: 14px;
+}
+
+#contact-status,
+#inbox-status,
+.inbox-item p {
+  font-size: 13px;
+}
+
+.inbox-item time {
+  font-size: 12px;
+}
+
+@media(max-width:700px) {
+  .site-nav {
+    gap: 14px;
+  }
+
+  .quiet,
+  .site-nav a,
+  .site-nav .quiet,
+  .collection-head h2,
+  .collection-head h2 small,
+  #search,
+  .series-index,
+  #series-count,
+  #grid .card-caption h3,
+  #grid .card-caption p,
+  .series-title .note-label {
+    font-size: 12px;
+  }
+
+  .series-title .note-excerpt {
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  #series-gallery .card-caption h3 {
+    font-size: 15px;
+  }
+
+  #series-gallery .card-caption p {
+    font-size: 13px;
+  }
+
+  .series-note-text {
+    font-size: 15px;
+  }
+
+  .footer-copyright {
+    font-size: 12px;
+  }
+
+  .canvas-dimensions label {
+    font-size: 12px;
+  }
+
+  .canvas-dimensions input,
+  .canvas-dimensions select {
+    font-size: 14px;
+  }
+}

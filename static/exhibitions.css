@@ -52,7 +52,7 @@
 .exhibition-tools > p {
   margin: 0;
   color: var(--archive-muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
   letter-spacing: .08em;
 }
@@ -105,7 +105,7 @@
 .archive-year-heading > p {
   margin: 0;
   color: var(--archive-muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
   letter-spacing: .08em;
 }
@@ -148,7 +148,7 @@
   align-items: center;
   gap: clamp(18px, 2.4vw, 42px);
   min-height: 144px;
-  padding: 20px 0;
+  padding: 20px clamp(16px, 1.4vw, 24px);
   color: inherit;
   text-decoration: none;
   transition: background-color .18s ease;
@@ -188,7 +188,7 @@
   height: 100%;
   place-items: center;
   color: #9a9a96;
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: .16em;
 }
 
@@ -215,7 +215,7 @@
   display: block;
   margin-top: 4px;
   color: var(--archive-muted);
-  font-size: clamp(12px, 1.1vw, 15px);
+  font-size: clamp(16px, 1.45vw, 21px);
   line-height: 1.1;
 }
 
@@ -237,7 +237,7 @@
 .archive-venue {
   margin: 0;
   color: var(--archive-muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -247,7 +247,7 @@
   padding: 3px 6px;
   border: 1px solid #d8d8d5;
   color: #555;
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.2;
   letter-spacing: .04em;
 }
@@ -280,7 +280,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--archive-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.8;
   overflow-wrap: anywhere;
   white-space: normal;
@@ -331,7 +331,7 @@
 }
 
 .exhibition-poster > span {
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: .12em;
 }
 
@@ -358,7 +358,7 @@
 .exhibition-period,
 .exhibition-status {
   color: var(--archive-muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .exhibition-meta {
@@ -400,7 +400,7 @@
 
 .archive-years > .exhibition-row > .exhibition-date span {
   margin: 0;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: .08em;
 }
 
@@ -474,7 +474,7 @@
 
 .exhibition-detail-head > span {
   color: var(--archive-muted);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: .14em;
   text-transform: uppercase;
 }
@@ -519,7 +519,7 @@
 
 .exhibition-detail-placeholder {
   color: #9b9b97;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .18em;
 }
 
@@ -536,7 +536,7 @@
 .exhibition-detail-status {
   margin: 0 0 20px;
   color: var(--archive-muted);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: .08em;
 }
 
@@ -565,7 +565,7 @@
   grid-template-columns: 54px minmax(0, 1fr);
   gap: 18px;
   padding: 6px 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.7;
 }
 
@@ -663,7 +663,7 @@
       "summary summary summary";
     gap: 8px 16px;
     min-height: 0;
-    padding: 18px 0;
+    padding: 18px 12px;
   }
 
   .archive-thumb {
@@ -680,7 +680,7 @@
   .archive-date small {
     display: block;
     margin: 3px 0 0;
-    font-size: 11px;
+    font-size: 14px;
   }
 
   .archive-main h4,
@@ -695,7 +695,7 @@
 
   .archive-summary {
     margin-top: 10px;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.7;
     -webkit-line-clamp: 2;
   }
@@ -722,7 +722,7 @@
   }
 
   .exhibition-description {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .archive-years > .exhibition-row > .exhibition-date {

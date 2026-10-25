@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import sqlite3
@@ -55,7 +56,7 @@ if CLOUD:
     for key in ['SUPABASE_DB_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GALLERY_ADMIN_PASSWORD']:
         if not os.environ.get(key):
             raise RuntimeError(f'Missing required server configuration: {key}')
-    from cloud_backend import database, save_image, remove_image, StorageAuthenticationError
+    from cloud_backend import database, save_image, remove_image, supabase_url, StorageAuthenticationError
     PASSWORD = os.environ['GALLERY_ADMIN_PASSWORD']
 else:
     DATA = Path(os.environ.get('GALLERY_DATA_DIR', ROOT / '.gallery')).resolve()
@@ -157,6 +158,27 @@ def discard_uploaded_image(image_path):
         pass
 
 
+def discard_existing_image(image_url, prefix):
+    """Best-effort deletion limited to files named and stored by this app."""
+    if not isinstance(image_url, str):
+        return
+    parsed = urlsplit(image_url)
+    filename = Path(parsed.path).name
+    if not re.fullmatch(re.escape(prefix) + r'[0-9a-f]{32}\.(?:png|jpg|webp)', filename):
+        return
+    try:
+        if CLOUD:
+            if (parsed.scheme != 'https' or parsed.netloc != urlsplit(supabase_url()).netloc or
+                    parsed.path != '/storage/v1/object/public/gallery-artworks/' + filename):
+                return
+            remove_image(filename)
+        elif image_url == '/images/' + filename:
+            (DATA / 'images' / filename).unlink(missing_ok=True)
+    except Exception:
+        # The edited database row is valid even if old-file cleanup is delayed.
+        pass
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         # Do not log request headers, passwords, or image data.
@@ -235,7 +257,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(201, {'status': 'received'})
             except (ValueError, KeyError, TypeError):
                 return self.respond(400, {'error': '메모 내용을 확인해 주세요. 최대 4,000자까지 입력할 수 있습니다.'})
-        if self.path not in ['/api/artworks', '/api/artworks/update', '/api/series/rename', '/api/exhibitions', '/api/series-notes']:
+        if self.path not in ['/api/artworks', '/api/artworks/update', '/api/series/rename', '/api/exhibitions', '/api/exhibitions/update', '/api/series-notes']:
             return self.respond(404, {'error': '찾을 수 없습니다.'})
         supplied = self.headers.get('Authorization', '').removeprefix('Bearer ')
         if not hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), hashlib.sha256(PASSWORD.encode()).digest()):
@@ -257,7 +279,7 @@ class Handler(BaseHTTPRequestHandler):
                         return self.respond(404, {'error': '해당 시리즈를 찾을 수 없습니다.'})
                     db.execute('INSERT INTO series_notes (series,note) VALUES (?,?) ON CONFLICT(series) DO UPDATE SET note=excluded.note', (series, note.strip()))
                 return self.respond(200, {'series': series})
-            if self.path == '/api/exhibitions':
+            if self.path in ['/api/exhibitions', '/api/exhibitions/update']:
                 exhibition = {}
                 for key, limit in [('title', 200), ('venue', 200), ('start_date', 10), ('end_date', 10), ('description', 2000)]:
                     value = payload.get(key, '')
@@ -272,9 +294,19 @@ class Handler(BaseHTTPRequestHandler):
                     valid = False
                 if not valid or not exhibition['title'] or not exhibition['venue']:
                     return self.respond(400, {'error': '전시명, 장소와 올바른 시작일·종료일을 입력해 주세요.'})
-                identifier = secrets.token_hex(16)
+                existing = None
+                if self.path == '/api/exhibitions/update':
+                    identifier = payload.get('id')
+                    if not isinstance(identifier, str) or not identifier or len(identifier) > 100:
+                        return self.respond(400, {'error': '수정할 전시를 확인해 주세요.'})
+                    with database() as db:
+                        existing = db.execute('SELECT * FROM exhibitions WHERE id=?', (identifier,)).fetchone()
+                    if existing is None:
+                        return self.respond(404, {'error': '수정할 전시를 찾을 수 없습니다.'})
+                else:
+                    identifier = secrets.token_hex(16)
                 image_path = None
-                image_url = ''
+                image_url = existing['image'] if existing else ''
                 if 'image' in payload:
                     try:
                         image_url, image_path = save_uploaded_image(payload['image'], 'exhibition-')
@@ -284,11 +316,17 @@ class Handler(BaseHTTPRequestHandler):
                         return self.respond(502, {'error': str(error)})
                 try:
                     with database() as db:
-                        db.execute('INSERT INTO exhibitions (id,title,venue,start_date,end_date,description,image) VALUES (?,?,?,?,?,?,?)', (identifier, exhibition['title'], exhibition['venue'], exhibition['start_date'], exhibition['end_date'], exhibition['description'], image_url))
+                        values = (exhibition['title'], exhibition['venue'], exhibition['start_date'], exhibition['end_date'], exhibition['description'], image_url)
+                        if existing:
+                            db.execute('UPDATE exhibitions SET title=?,venue=?,start_date=?,end_date=?,description=?,image=? WHERE id=?', values + (identifier,))
+                        else:
+                            db.execute('INSERT INTO exhibitions (id,title,venue,start_date,end_date,description,image) VALUES (?,?,?,?,?,?,?)', (identifier,) + values)
                 except Exception:
                     discard_uploaded_image(image_path)
                     raise
-                return self.respond(201, {'id': identifier})
+                if existing and image_path:
+                    discard_existing_image(existing['image'], 'exhibition-')
+                return self.respond(200 if existing else 201, {'id': identifier})
             if self.path == '/api/series/rename':
                 source, target = payload.get('source'), payload.get('target')
                 if not isinstance(source, str) or not isinstance(target, str) or len(source) > 120 or len(target) > 120 or not target.strip():

@@ -45,14 +45,15 @@
   <dialog id="exhibition-dialog">
     <form id="exhibition-form">
       <div class="dialog-head">
-        <h2>전시 등록</h2>
+        <h2 id="exhibition-form-title">전시 등록</h2>
         <button type="button" class="close" aria-label="닫기">×</button>
       </div>
       <label>관리자 비밀번호<input name="exhibitionPassword" type="password" autocomplete="current-password" required></label>
-      <label>대표 이미지 (선택)
+      <label><span id="exhibition-image-label">대표 이미지 (선택)</span>
         <input id="exhibition-image-input" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif" aria-describedby="exhibition-image-help">
         <small id="exhibition-image-help">JPG, PNG, WebP, HEIC · 최대 3MB</small>
       </label>
+      <img id="exhibition-current-image" alt="현재 전시 대표 이미지" hidden>
       <label>전시명<input name="title" maxlength="200" required></label>
       <label>장소<input name="venue" maxlength="200" required></label>
       <div class="form-row">
@@ -62,7 +63,7 @@
       <p class="muted">한국 시간 기준 · 종료일 다음 날부터 지난 전시에 표시됩니다.</p>
       <label>전시 소개<textarea name="description" maxlength="2000" rows="3"></textarea></label>
       <p id="exhibition-form-status" role="status"></p>
-      <button type="submit" class="primary">전시 저장하기</button>
+      <button id="exhibition-submit" type="submit" class="primary">전시 저장하기</button>
     </form>
   </dialog>
 
@@ -90,6 +91,7 @@
           </div>
         </dl>
         <p id="exhibition-detail-description" class="exhibition-detail-description"></p>
+        <button id="edit-exhibition" type="button" class="quiet">전시 편집 ↗</button>
       </div>
     </div>
   </dialog>

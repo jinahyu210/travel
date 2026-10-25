@@ -107,6 +107,14 @@
       const image = item.image ? imageData(item.image) : '';
       await commit({...snapshot(), exhibitions:[{...item,image,id:Date.now().toString(36)+Math.random().toString(36).slice(2)},...exhibitions]});
     },
+    async updateExhibition(id, payload) {
+      if (!payload.title || !payload.venue || !GalleryRules.exhibitionStatus(payload)) throw new Error('전시 정보를 확인해 주세요.');
+      await ready;
+      const existing = exhibitions.find(exhibition => exhibition.id === id);
+      if (!existing) throw new Error('수정할 전시를 찾을 수 없습니다.');
+      const updated = {...existing, ...payload, id, image:payload.image ? imageData(payload.image) : existing.image};
+      await commit({...snapshot(), exhibitions:exhibitions.map(exhibition => exhibition.id === id ? updated : exhibition)});
+    },
     async create(payload) {
       await ready;
       const item = {...payload,id:Date.now().toString(36)+Math.random().toString(36).slice(2),image:imageData(payload.image)};

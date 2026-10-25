@@ -196,6 +196,52 @@ class GalleryTest(unittest.TestCase):
             with self.subTest(image=invalid):
                 self.assertEqual(self.request('/api/exhibitions', dict(item, image=invalid), 'test-only-password')[0], 400)
 
+    def test_edit_exhibition_preserves_identity_and_replaces_owned_image(self):
+        item = dict(title='처음 전시', venue='처음 장소', start_date='2026-10-20', end_date='2026-10-24', description='처음 소개', image=base64.b64encode(PNG).decode())
+        status, body, _ = self.request('/api/exhibitions', item, 'test-only-password')
+        self.assertEqual(status, 201)
+        identifier = json.loads(body)['id']
+        original = json.loads(self.request('/api/exhibitions')[1])[0]
+        original_path = original['image']
+
+        edit = dict(item, id=identifier, title='수정한 전시', venue='수정한 장소', start_date='2026-11-01', end_date='2026-11-30', description='수정한 소개')
+        del edit['image']
+        self.assertEqual(self.request('/api/exhibitions/update', edit)[0], 401)
+        self.assertEqual(self.request('/api/exhibitions/update', edit, 'test-only-password')[0], 200)
+        self.process.terminate()
+        self.process.wait(timeout=5)
+        self.start()
+        row = json.loads(self.request('/api/exhibitions')[1])[0]
+        self.assertEqual(row['id'], identifier)
+        self.assertEqual(row['title'], edit['title'])
+        self.assertEqual(row['venue'], edit['venue'])
+        self.assertEqual(row['start_date'], edit['start_date'])
+        self.assertEqual(row['end_date'], edit['end_date'])
+        self.assertEqual(row['description'], edit['description'])
+        self.assertEqual(row['image'], original_path)
+        self.assertEqual(self.request(original_path)[0], 200)
+
+        invalid = dict(edit, image='invalid base64')
+        self.assertEqual(self.request('/api/exhibitions/update', invalid, 'test-only-password')[0], 400)
+        self.assertEqual(self.request('/api/exhibitions/update', dict(edit, end_date='2026-10-31'), 'test-only-password')[0], 400)
+        self.assertEqual(json.loads(self.request('/api/exhibitions')[1])[0]['image'], original_path)
+        self.assertEqual(self.request('/api/exhibitions/update', dict(edit, id='missing'), 'test-only-password')[0], 404)
+        self.assertEqual(self.request('/api/exhibitions/update', dict(edit, id={'bad': True}), 'test-only-password')[0], 400)
+
+        replacement = dict(edit, image=base64.b64encode(PNG).decode())
+        self.assertEqual(self.request('/api/exhibitions/update', replacement, 'test-only-password')[0], 200)
+        row = json.loads(self.request('/api/exhibitions')[1])[0]
+        self.assertNotEqual(row['image'], original_path)
+        self.assertEqual(self.request(row['image'])[0], 200)
+        self.assertEqual(self.request(original_path)[0], 404)
+
+        protected = Path(self.data.name) / 'images' / 'exhibition-not-owned.png'
+        protected.write_bytes(PNG)
+        with sqlite3.connect(Path(self.data.name) / 'gallery.sqlite3') as db:
+            db.execute('UPDATE exhibitions SET image=? WHERE id=?', ('/images/exhibition-not-owned.png', identifier))
+        self.assertEqual(self.request('/api/exhibitions/update', replacement, 'test-only-password')[0], 200)
+        self.assertTrue(protected.is_file())
+
     def test_existing_exhibitions_are_migrated_without_losing_records(self):
         item = dict(title='기존 전시', venue='갤러리', start_date='2026-10-20', end_date='2026-10-24', description='전시 소개')
         self.assertEqual(self.request('/api/exhibitions', item, 'test-only-password')[0], 201)

@@ -1,6 +1,8 @@
 (() => {
   let exhibitions = [];
   let midnightTimer;
+  let editingExhibition = null;
+  let shownExhibition = null;
 
   const statusLabels = {
     upcoming: '예정 전시',
@@ -39,6 +41,7 @@
   }
 
   function openDetail(item, status) {
+    shownExhibition = item;
     const dialog = document.getElementById('exhibition-detail');
     const image = document.getElementById('exhibition-detail-image');
     const placeholder = document.getElementById('exhibition-detail-placeholder');
@@ -60,6 +63,7 @@
     const description = document.getElementById('exhibition-detail-description');
     description.textContent = item.description || '';
     description.hidden = !item.description;
+    document.getElementById('edit-exhibition').hidden = !item.id;
     dialog.showModal();
   }
 
@@ -101,9 +105,24 @@
     return row;
   }
 
-  function openRegistration() {
+  function openRegistration(item = null) {
+    form.reset();
+    editingExhibition = item;
     document.getElementById('exhibition-form-status').textContent = '';
-    document.getElementById('exhibition-dialog').showModal();
+    document.getElementById('exhibition-form-title').textContent = item ? '전시 편집' : '전시 등록';
+    document.getElementById('exhibition-submit').textContent = item ? '수정 저장하기' : '전시 저장하기';
+    document.getElementById('exhibition-image-label').textContent = item ? '대표 이미지 교체 (선택)' : '대표 이미지 (선택)';
+    const currentImage = document.getElementById('exhibition-current-image');
+    currentImage.hidden = !item?.image;
+    if (item?.image) currentImage.src = item.image;
+    else currentImage.removeAttribute('src');
+    if (item) {
+      ['title', 'venue', 'start_date', 'end_date', 'description'].forEach(key => {
+        form.elements[key].value = item[key] || '';
+      });
+      form.elements.end_date.min = item.start_date;
+    }
+    dialog.showModal();
   }
 
   function yearGroup(year, items, label, allowRegistration = false) {
@@ -212,9 +231,19 @@
   [dialog, detail].forEach(modal => modal.addEventListener('click', event => {
     if (event.target === modal) modal.close();
   }));
-  dialog.addEventListener('close', () => { form.elements.exhibitionPassword.value = ''; });
+  dialog.addEventListener('close', () => {
+    form.elements.exhibitionPassword.value = '';
+    editingExhibition = null;
+  });
+  detail.addEventListener('close', () => { shownExhibition = null; });
+  document.getElementById('edit-exhibition').addEventListener('click', () => {
+    const item = shownExhibition;
+    if (!item) return;
+    detail.close();
+    openRegistration(item);
+  });
   form.elements.start_date.addEventListener('input', () => { form.elements.end_date.min = form.elements.start_date.value; });
-  form.addEventListener('reset', () => queueMicrotask(() => { form.elements.end_date.min = ''; }));
+  form.addEventListener('reset', () => queueMicrotask(() => { form.elements.end_date.min = form.elements.start_date.value; }));
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const submit = form.querySelector('[type=submit]');
@@ -234,9 +263,14 @@
     submit.disabled = true;
     try {
       if (file) item.image = await readImage(file);
-      if (window.galleryStore) await window.galleryStore.createExhibition(item);
+      const editedId = editingExhibition?.id;
+      if (window.galleryStore) {
+        if (editedId) await window.galleryStore.updateExhibition(editedId, item);
+        else await window.galleryStore.createExhibition(item);
+      }
       else {
-        const response = await fetch('/api/exhibitions', {
+        if (editedId) item.id = editedId;
+        const response = await fetch(editedId ? '/api/exhibitions/update' : '/api/exhibitions', {
           method: 'POST',
           headers: {'Content-Type': 'application/json', Authorization: `Bearer ${form.elements.exhibitionPassword.value}`},
           body: JSON.stringify(item)
@@ -247,6 +281,10 @@
       form.reset();
       await load();
       dialog.close();
+      if (editedId) {
+        const updated = exhibitions.find(exhibition => exhibition.id === editedId);
+        if (updated) openDetail(updated, GalleryRules.exhibitionStatus(updated));
+      }
     } catch (error) {
       status.textContent = error.message || '전시를 저장하지 못했습니다.';
     } finally {

@@ -16,6 +16,8 @@ os.environ.update(SUPABASE_DB_URL=uri, SUPABASE_URL='https://example.supabase.co
 import server
 from api.index import handler
 server.save_image = lambda filename, raw, mime: 'https://example.supabase.co/storage/v1/object/public/gallery-artworks/' + filename
+removed_images = []
+server.remove_image = removed_images.append
 http = server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
 threading.Thread(target=http.serve_forever, daemon=True).start()
 def call(route, payload=None, admin=False):
@@ -43,6 +45,16 @@ status, exhibition = call('exhibitions',dict(title='Image Show',venue='Seoul',st
 assert status == 201, (status, exhibition)
 stored_exhibition = next(item for item in call('exhibitions')[1] if item['id'] == exhibition['id'])
 assert stored_exhibition['image'].startswith('https://example.supabase.co/storage/v1/object/public/gallery-artworks/exhibition-')
+original_exhibition_image = stored_exhibition['image']
+edit_exhibition = dict(title='Edited Image Show',venue='Busan',start_date='2026-11-03',end_date='2026-11-04',description='Edited',id=exhibition['id'])
+assert call('exhibitions/update',edit_exhibition)[0] == 401
+assert call('exhibitions/update',edit_exhibition,True)[0] == 200
+stored_exhibition = next(item for item in call('exhibitions')[1] if item['id'] == exhibition['id'])
+assert stored_exhibition['title'] == 'Edited Image Show' and stored_exhibition['image'] == original_exhibition_image
+assert call('exhibitions/update',{**edit_exhibition,'image':payload['image']},True)[0] == 200
+stored_exhibition = next(item for item in call('exhibitions')[1] if item['id'] == exhibition['id'])
+assert stored_exhibition['image'] != original_exhibition_image
+assert removed_images == [original_exhibition_image.rsplit('/',1)[1]]
 assert call('messages',dict(message='private'))[0] == 201
 assert call('messages')[0] == 401
 assert call('messages',admin=True)[1][0]['message'] == 'private'

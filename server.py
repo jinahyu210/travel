@@ -80,16 +80,82 @@ with database() as db:
         db.execute('SELECT pg_advisory_xact_lock(73190421)')
     db.execute('CREATE TABLE IF NOT EXISTS series_notes (series TEXT PRIMARY KEY, note TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, name TEXT NOT NULL, reply_to TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)')
-    db.execute('CREATE TABLE IF NOT EXISTS exhibitions (id TEXT PRIMARY KEY, title TEXT NOT NULL, venue TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, description TEXT NOT NULL)')
+    db.execute("CREATE TABLE IF NOT EXISTS exhibitions (id TEXT PRIMARY KEY, title TEXT NOT NULL, venue TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, description TEXT NOT NULL, image TEXT NOT NULL DEFAULT '')")
     db.execute('CREATE TABLE IF NOT EXISTS artworks (id TEXT PRIMARY KEY, title TEXT NOT NULL, artist TEXT NOT NULL, year TEXT NOT NULL, description TEXT NOT NULL, image TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)')
     columns = ({row['column_name'] for row in db.execute("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='artworks'")} if CLOUD else {row['name'] for row in db.execute('PRAGMA table_info(artworks)')})
     for column in ['series', 'medium', 'price', 'dimensions', 'canvas_size']:
         if column not in columns:
             db.execute(f"ALTER TABLE artworks ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+    exhibition_columns = ({row['column_name'] for row in db.execute("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='exhibitions'")} if CLOUD else {row['name'] for row in db.execute('PRAGMA table_info(exhibitions)')})
+    if 'image' not in exhibition_columns:
+        db.execute("ALTER TABLE exhibitions ADD COLUMN image TEXT NOT NULL DEFAULT ''")
     if CLOUD:
         for table in ['artworks', 'exhibitions', 'series_notes', 'messages']:
             db.execute(f'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY')
             db.execute(f'REVOKE ALL ON TABLE {table} FROM anon, authenticated')
+
+
+class ImageValidationError(Exception):
+    pass
+
+
+class ImageStorageError(Exception):
+    pass
+
+
+def save_uploaded_image(encoded, prefix=''):
+    if not isinstance(encoded, str):
+        raise ImageValidationError('이미지 파일을 다시 선택해 주세요.')
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        raise ImageValidationError('이미지 파일을 읽지 못했습니다. 다시 선택해 주세요.') from None
+    if not raw or len(raw) > MAX_IMAGE_BYTES:
+        raise ImageValidationError('이미지는 3MB 이하로 올려 주세요.')
+    if is_heif(raw):
+        try:
+            raw = convert_heif(raw)
+        except (OSError, ValueError):
+            raise ImageValidationError('HEIC 이미지를 변환하지 못했습니다. 원본 사진을 다시 선택해 주세요.') from None
+        extension = '.jpg'
+    elif raw.startswith(b'\x89PNG\r\n\x1a\n'):
+        extension = '.png'
+    elif raw.startswith(b'\xff\xd8\xff'):
+        extension = '.jpg'
+    elif raw.startswith(b'RIFF') and raw[8:12] == b'WEBP':
+        extension = '.webp'
+    else:
+        raise ImageValidationError('JPG, PNG, WebP, HEIC 이미지만 지원합니다.')
+    filename = prefix + secrets.token_hex(16) + extension
+    if CLOUD:
+        mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'}[extension]
+        try:
+            return save_image(filename, raw, mime), filename
+        except StorageAuthenticationError:
+            raise ImageStorageError('사진 저장소 인증 설정을 확인해 주세요.') from None
+        except HTTPError as error:
+            if error.code in (401, 403):
+                raise ImageStorageError('사진 저장소 인증 설정을 확인해 주세요.') from None
+            raise ImageStorageError(f'사진 저장소 연결 오류가 발생했습니다. ({error.code})') from None
+        except (ValueError, TypeError, URLError):
+            raise ImageStorageError('사진 저장소 주소 설정을 확인해 주세요.') from None
+    image_path = DATA / 'images' / filename
+    image_path.write_bytes(raw)
+    return '/images/' + filename, image_path
+
+
+def discard_uploaded_image(image_path):
+    if not image_path:
+        return
+    try:
+        if CLOUD:
+            remove_image(image_path)
+        else:
+            image_path.unlink(missing_ok=True)
+    except Exception:
+        # Cleanup must not hide the database error that prevented the record.
+        pass
+
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -207,8 +273,21 @@ class Handler(BaseHTTPRequestHandler):
                 if not valid or not exhibition['title'] or not exhibition['venue']:
                     return self.respond(400, {'error': '전시명, 장소와 올바른 시작일·종료일을 입력해 주세요.'})
                 identifier = secrets.token_hex(16)
-                with database() as db:
-                    db.execute('INSERT INTO exhibitions (id,title,venue,start_date,end_date,description) VALUES (?,?,?,?,?,?)', (identifier, exhibition['title'], exhibition['venue'], exhibition['start_date'], exhibition['end_date'], exhibition['description']))
+                image_path = None
+                image_url = ''
+                if 'image' in payload:
+                    try:
+                        image_url, image_path = save_uploaded_image(payload['image'], 'exhibition-')
+                    except ImageValidationError as error:
+                        return self.respond(400, {'error': str(error)})
+                    except ImageStorageError as error:
+                        return self.respond(502, {'error': str(error)})
+                try:
+                    with database() as db:
+                        db.execute('INSERT INTO exhibitions (id,title,venue,start_date,end_date,description,image) VALUES (?,?,?,?,?,?,?)', (identifier, exhibition['title'], exhibition['venue'], exhibition['start_date'], exhibition['end_date'], exhibition['description'], image_url))
+                except Exception:
+                    discard_uploaded_image(image_path)
+                    raise
                 return self.respond(201, {'id': identifier})
             if self.path == '/api/series/rename':
                 source, target = payload.get('source'), payload.get('target')
@@ -249,46 +328,12 @@ class Handler(BaseHTTPRequestHandler):
             image_path = None
             image_url = existing['image'] if existing else None
             if 'image' in payload:
-                if not isinstance(payload['image'], str):
-                    return self.respond(400, {'error': '이미지 파일을 다시 선택해 주세요.'})
                 try:
-                    raw = base64.b64decode(payload['image'], validate=True)
-                except (binascii.Error, ValueError):
-                    return self.respond(400, {'error': '이미지 파일을 읽지 못했습니다. 다시 선택해 주세요.'})
-                if not raw or len(raw) > MAX_IMAGE_BYTES:
-                    return self.respond(400, {'error': '이미지는 3MB 이하로 올려 주세요.'})
-                if is_heif(raw):
-                    try:
-                        raw = convert_heif(raw)
-                    except (OSError, ValueError):
-                        return self.respond(400, {'error': 'HEIC 이미지를 변환하지 못했습니다. 원본 사진을 다시 선택해 주세요.'})
-                    extension = '.jpg'
-                elif raw.startswith(b'\x89PNG\r\n\x1a\n'):
-                    extension = '.png'
-                elif raw.startswith(b'\xff\xd8\xff'):
-                    extension = '.jpg'
-                elif raw.startswith(b'RIFF') and raw[8:12] == b'WEBP':
-                    extension = '.webp'
-                else:
-                    return self.respond(400, {'error': 'JPG, PNG, WebP, HEIC 이미지만 지원합니다.'})
-                filename = secrets.token_hex(16) + extension
-                if CLOUD:
-                    mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'}[extension]
-                    try:
-                        image_url = save_image(filename, raw, mime)
-                    except StorageAuthenticationError:
-                        return self.respond(502, {'error': '사진 저장소 인증 설정을 확인해 주세요.'})
-                    except HTTPError as error:
-                        if error.code in (401, 403):
-                            return self.respond(502, {'error': '사진 저장소 인증 설정을 확인해 주세요.'})
-                        return self.respond(502, {'error': f'사진 저장소 연결 오류가 발생했습니다. ({error.code})'})
-                    except (ValueError, TypeError, URLError):
-                        return self.respond(502, {'error': '사진 저장소 주소 설정을 확인해 주세요.'})
-                    image_path = filename
-                else:
-                    image_path = DATA / 'images' / filename
-                    image_path.write_bytes(raw)
-                    image_url = '/images/' + filename
+                    image_url, image_path = save_uploaded_image(payload['image'])
+                except ImageValidationError as error:
+                    return self.respond(400, {'error': str(error)})
+                except ImageStorageError as error:
+                    return self.respond(502, {'error': str(error)})
             elif existing is None:
                 return self.respond(400, {'error': '작품 이미지를 선택해 주세요.'})
             artwork_id = existing['id'] if existing else secrets.token_hex(16)
@@ -300,11 +345,7 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         db.execute('INSERT INTO artworks (id,title,artist,series,year,medium,price,dimensions,canvas_size,description,image) VALUES (?,?,?,?,?,?,?,?,?,?,?)', (artwork_id,) + values)
             except Exception:
-                if image_path:
-                    if CLOUD:
-                        remove_image(image_path)
-                    else:
-                        image_path.unlink(missing_ok=True)
+                discard_uploaded_image(image_path)
                 raise
             self.respond(200 if existing else 201, {'id': artwork_id})
         except (ValueError, KeyError, TypeError):

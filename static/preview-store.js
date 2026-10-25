@@ -104,7 +104,8 @@
     async createExhibition(item) {
       if (!item.title || !item.venue || !GalleryRules.exhibitionStatus(item)) throw new Error('전시 정보를 확인해 주세요.');
       await ready;
-      await commit({...snapshot(), exhibitions:[{...item,id:Date.now().toString(36)+Math.random().toString(36).slice(2)},...exhibitions]});
+      const image = item.image ? imageData(item.image) : '';
+      await commit({...snapshot(), exhibitions:[{...item,image,id:Date.now().toString(36)+Math.random().toString(36).slice(2)},...exhibitions]});
     },
     async create(payload) {
       await ready;
@@ -161,7 +162,7 @@
       if (!Array.isArray(snapshot.works) || !Array.isArray(snapshot.exhibitions)) throw new Error('올바른 갤러리 백업 파일이 아닙니다.');
       const fields = ['title','artist','series','year','medium','price','dimensions','canvas_size','description'];
       if (snapshot.works.some(item => !item || typeof item.image !== 'string' || !/^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(item.image) || fields.some(key => item[key] != null && typeof item[key] !== 'string'))) throw new Error('백업의 작품 정보를 확인해 주세요.');
-      if (snapshot.exhibitions.some(item => !item || !GalleryRules.exhibitionStatus(item) || typeof item.title !== 'string' || typeof item.venue !== 'string')) throw new Error('백업의 전시 정보를 확인해 주세요.');
+      if (snapshot.exhibitions.some(item => !item || !GalleryRules.exhibitionStatus(item) || typeof item.title !== 'string' || typeof item.venue !== 'string' || (item.image != null && (typeof item.image !== 'string' || (item.image && !/^data:image\/(png|jpeg|webp);base64,/.test(item.image)))))) throw new Error('백업의 전시 정보를 확인해 주세요.');
       // Merge by ID to preserve existing work; do not overwrite newer local edits.
       await read(); await readExhibitions();
       const current = works.filter(item => !item.preview_frame);

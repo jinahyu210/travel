@@ -2,6 +2,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -170,9 +171,61 @@ class GalleryTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         for key, value in item.items():
             self.assertEqual(rows[0][key], value)
+        self.assertEqual(rows[0]['image'], '')
         for change in [dict(end_date='2026-10-19'), dict(start_date='2026-02-30'), dict(end_date='20261024'), dict(title='')]:
             with self.subTest(change=change):
                 self.assertEqual(self.request('/api/exhibitions', dict(item, **change), 'test-only-password')[0], 400)
+
+    def test_exhibition_representative_image_is_validated_stored_and_served(self):
+        item = dict(title='이미지가 있는 전시', venue='갤러리', start_date='2026-10-20', end_date='2026-10-24', description='전시 소개', image=base64.b64encode(PNG).decode())
+        status, body, _ = self.request('/api/exhibitions', item, 'test-only-password')
+        self.assertEqual(status, 201)
+        identifier = json.loads(body)['id']
+        row = next(item for item in json.loads(self.request('/api/exhibitions')[1]) if item['id'] == identifier)
+        self.assertTrue(row['image'].startswith('/images/exhibition-'))
+        status, body, headers = self.request(row['image'])
+        self.assertEqual(status, 200)
+        self.assertEqual(body, PNG)
+        self.assertEqual(headers['Content-Type'], 'image/png')
+        self.process.terminate()
+        self.process.wait(timeout=5)
+        self.start()
+        row = next(item for item in json.loads(self.request('/api/exhibitions')[1]) if item['id'] == identifier)
+        self.assertTrue(row['image'].startswith('/images/exhibition-'))
+        for invalid in ['invalid base64', base64.b64encode(b'<svg/>').decode()]:
+            with self.subTest(image=invalid):
+                self.assertEqual(self.request('/api/exhibitions', dict(item, image=invalid), 'test-only-password')[0], 400)
+
+    def test_existing_exhibitions_are_migrated_without_losing_records(self):
+        item = dict(title='기존 전시', venue='갤러리', start_date='2026-10-20', end_date='2026-10-24', description='전시 소개')
+        self.assertEqual(self.request('/api/exhibitions', item, 'test-only-password')[0], 201)
+        self.process.terminate()
+        self.process.wait(timeout=5)
+        with sqlite3.connect(Path(self.data.name) / 'gallery.sqlite3') as db:
+            db.execute('ALTER TABLE exhibitions DROP COLUMN image')
+        self.start()
+        rows = json.loads(self.request('/api/exhibitions')[1])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['title'], item['title'])
+        self.assertEqual(rows[0]['image'], '')
+
+    def test_export_preview_embeds_local_exhibition_images(self):
+        with tempfile.TemporaryDirectory() as directory:
+            preview_root = Path(directory)
+            shutil.copy(ROOT / 'export_preview.py', preview_root / 'export_preview.py')
+            shutil.copytree(ROOT / 'static', preview_root / 'static')
+            images = preview_root / '.gallery' / 'images'
+            images.mkdir(parents=True)
+            (images / 'exhibition.png').write_bytes(PNG)
+            with sqlite3.connect(preview_root / '.gallery' / 'gallery.sqlite3') as db:
+                db.execute('CREATE TABLE artworks (id TEXT PRIMARY KEY, created_at TEXT)')
+                db.execute('CREATE TABLE exhibitions (id TEXT PRIMARY KEY, title TEXT, venue TEXT, start_date TEXT, end_date TEXT, description TEXT, image TEXT)')
+                db.execute("INSERT INTO exhibitions VALUES ('show','전시','갤러리','2026-10-20','2026-10-24','','/images/exhibition.png')")
+            subprocess.run([sys.executable, 'export_preview.py'], cwd=preview_root, check=True, capture_output=True)
+            preview = (preview_root / 'gallery-preview.html').read_text()
+            encoded = base64.b64encode(PNG).decode()
+            self.assertIn('data:image/png;base64,' + encoded, preview)
+            self.assertNotIn('/images/exhibition.png', preview)
 
     def test_edit_artwork_preserves_image_and_identity_and_requires_admin(self):
         payload = self.artwork(series='Series 01', medium='Acrylic on canvas', price='가격 문의')

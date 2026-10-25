@@ -10,6 +10,8 @@ uri = pg.get_uri()
 with psycopg.connect(uri) as db:
     db.execute('CREATE ROLE anon')
     db.execute('CREATE ROLE authenticated')
+    db.execute('CREATE TABLE exhibitions (id TEXT PRIMARY KEY, title TEXT NOT NULL, venue TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, description TEXT NOT NULL)')
+    db.execute("INSERT INTO exhibitions (id,title,venue,start_date,end_date,description) VALUES ('legacy','Legacy Show','Seoul','2025-01-01','2025-01-02','')")
 os.environ.update(SUPABASE_DB_URL=uri, SUPABASE_URL='https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY='test', GALLERY_ADMIN_PASSWORD='test-admin')
 import server
 from api.index import handler
@@ -34,12 +36,18 @@ edit={**payload,'id':created['id'],'title':'Edited','series':'관계'}
 del edit['image']
 assert call('artworks/update',edit,True)[0] == 200
 assert call('artworks')[1][0]['title'] == 'Edited'
+legacy = call('exhibitions')[1]
+assert len(legacy) == 1 and legacy[0]['id'] == 'legacy' and legacy[0]['image'] == ''
 assert call('exhibitions',dict(title='Show',venue='Seoul',start_date='2026-10-25',end_date='2026-10-26'),True)[0] == 201
-assert len(call('exhibitions')[1]) == 1
+status, exhibition = call('exhibitions',dict(title='Image Show',venue='Seoul',start_date='2026-11-01',end_date='2026-11-02',image=payload['image']),True)
+assert status == 201, (status, exhibition)
+stored_exhibition = next(item for item in call('exhibitions')[1] if item['id'] == exhibition['id'])
+assert stored_exhibition['image'].startswith('https://example.supabase.co/storage/v1/object/public/gallery-artworks/exhibition-')
 assert call('messages',dict(message='private'))[0] == 201
 assert call('messages')[0] == 401
 assert call('messages',admin=True)[1][0]['message'] == 'private'
 with psycopg.connect(uri) as db:
+    assert db.execute("SELECT column_default FROM information_schema.columns WHERE table_name='exhibitions' AND column_name='image'").fetchone() is not None
     assert db.execute("SELECT relrowsecurity FROM pg_class WHERE relname='messages'").fetchone()[0]
     assert not db.execute("SELECT has_table_privilege('anon','messages','SELECT')").fetchone()[0]
 http.shutdown()

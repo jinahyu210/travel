@@ -17,6 +17,17 @@ script = (static / 'app.js').read_text()
 works = []
 exhibitions = []
 series_notes = {}
+
+
+def embed_local_image(item):
+    value = item.get('image', '')
+    if not value.startswith('/images/'):
+        return
+    image = root / '.gallery' / 'images' / Path(value).name
+    mime = mimetypes.guess_type(image.name)[0] or 'application/octet-stream'
+    item['image'] = f'data:{mime};base64,' + base64.b64encode(image.read_bytes()).decode()
+
+
 db_path = root / '.gallery' / 'gallery.sqlite3'
 if db_path.is_file():
     with sqlite3.connect(db_path.as_uri() + '?mode=ro', uri=True) as db:
@@ -26,10 +37,8 @@ if db_path.is_file():
             series_notes = {row['series']: row['note'] for row in db.execute('SELECT series,note FROM series_notes')}
         if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='exhibitions'").fetchone():
             exhibitions = [dict(row) for row in db.execute('SELECT * FROM exhibitions ORDER BY start_date DESC, rowid DESC')]
-    for work in works:
-        image = root / '.gallery' / 'images' / Path(work['image']).name
-        mime = mimetypes.guess_type(image.name)[0] or 'application/octet-stream'
-        work['image'] = f'data:{mime};base64,' + base64.b64encode(image.read_bytes()).decode()
+    for item in works + exhibitions:
+        embed_local_image(item)
 if not works:
     for series_index, count in enumerate([3, 2, 4], start=1):
         for index in range(count):

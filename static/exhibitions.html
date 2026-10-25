@@ -1,14 +1,97 @@
 <!doctype html>
 <html lang="ko">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>전시 — 마리박현숙</title><meta name="description" content="마리박현숙 작가의 최신 전시 소식과 지난 전시 기록."><link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./exhibitions.css"><script defer src="./gallery-rules.js"></script><script defer src="./exhibitions.js"></script></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>전시 — 마리박현숙</title>
+  <meta name="description" content="마리박현숙 작가의 최신 전시 소식과 지난 전시 기록.">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./exhibitions.css">
+  <script defer src="./gallery-rules.js"></script>
+  <script defer src="./exhibitions.js"></script>
+</head>
 <body class="exhibitions-page">
-<header><a href="/" class="brand">Mari<span class="brand-artist">Park Hyun Sook</span><span>마리 박현숙 온라인 갤러리</span></a><nav class="site-nav" aria-label="주 메뉴"><a href="/">작품</a><a href="/exhibitions" aria-current="page">Exhibitions</a><a href="/contact">Contact</a><a href="/?register=1" class="quiet">관리자 · 작품 등록 ↗</a></nav></header>
-<main>
-<section class="intro exhibition-intro" aria-labelledby="page-title"><h1 id="page-title">Exhibitions<span>전시소식 살펴보기</span></h1></section>
-<section id="current" class="exhibition-section" aria-labelledby="current-title"><div class="section-heading"><h2 id="current-title">Current <span>Exhibitions</span></h2><div class="exhibition-tools"><p>최신 전시</p><button id="exhibition-add" class="quiet" type="button">전시 등록 ↗</button></div></div>
-<div id="current-exhibitions"></div>
-</section>
-<section class="exhibition-section past-section" aria-labelledby="past-title"><div class="section-heading"><h2 id="past-title">Past <span>Exhibitions</span></h2><p>지난 전시</p></div><div id="past-exhibitions"></div></section>
-</main><footer><a class="footer-brand" href="/"><span>마리 박현숙 온라인 갤러리</span></a><span class="footer-copyright">© 2026 Park Hyun Sook. All rights reserved.</span></footer>
-<dialog id="exhibition-dialog"><form id="exhibition-form"><div class="dialog-head"><h2>전시 등록</h2><button type="button" class="close" aria-label="닫기">×</button></div><label>관리자 비밀번호<input name="exhibitionPassword" type="password" autocomplete="current-password" required></label><label>전시명<input name="title" maxlength="200" required></label><label>장소<input name="venue" maxlength="200" required></label><div class="form-row"><label>시작일<input name="start_date" type="date" required></label><label>종료일<input name="end_date" type="date" required></label></div><p class="muted">한국 시간 기준 · 종료일 다음 날부터 지난 전시에 표시됩니다.</p><label>전시 소개<textarea name="description" maxlength="2000" rows="3"></textarea></label><p id="exhibition-form-status" role="status"></p><button type="submit" class="primary">전시 저장하기</button></form></dialog>
-</body></html>
+  <header>
+    <a href="/" class="brand">Mari<span class="brand-artist">Park Hyun Sook</span><span>마리 박현숙 온라인 갤러리</span></a>
+    <nav class="site-nav" aria-label="주 메뉴">
+      <a href="/">작품</a>
+      <a href="/exhibitions" aria-current="page">Exhibitions</a>
+      <a href="/contact">Contact</a>
+      <a href="/?register=1" class="quiet">관리자 · 작품 등록 ↗</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="intro exhibition-intro" aria-labelledby="page-title">
+      <h1 id="page-title">Exhibitions<span>전시 기록</span></h1>
+    </section>
+
+    <section id="current" class="exhibition-section archive-section" aria-labelledby="current-title">
+      <h2 id="current-title" class="visually-hidden">현재 및 예정 전시</h2>
+      <div id="current-exhibitions" class="archive-years" aria-live="polite"></div>
+    </section>
+
+    <section class="exhibition-section archive-section past-section" aria-labelledby="past-title">
+      <h2 id="past-title" class="visually-hidden">지난 전시</h2>
+      <div id="past-exhibitions" class="archive-years" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="footer-brand" href="/"><span>마리 박현숙 온라인 갤러리</span></a>
+    <span class="footer-copyright">© 2026 Park Hyun Sook. All rights reserved.</span>
+  </footer>
+
+  <dialog id="exhibition-dialog">
+    <form id="exhibition-form">
+      <div class="dialog-head">
+        <h2>전시 등록</h2>
+        <button type="button" class="close" aria-label="닫기">×</button>
+      </div>
+      <label>관리자 비밀번호<input name="exhibitionPassword" type="password" autocomplete="current-password" required></label>
+      <label>대표 이미지 (선택)
+        <input id="exhibition-image-input" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif" aria-describedby="exhibition-image-help">
+        <small id="exhibition-image-help">JPG, PNG, WebP, HEIC · 최대 3MB</small>
+      </label>
+      <label>전시명<input name="title" maxlength="200" required></label>
+      <label>장소<input name="venue" maxlength="200" required></label>
+      <div class="form-row">
+        <label>시작일<input name="start_date" type="date" required></label>
+        <label>종료일<input name="end_date" type="date" required></label>
+      </div>
+      <p class="muted">한국 시간 기준 · 종료일 다음 날부터 지난 전시에 표시됩니다.</p>
+      <label>전시 소개<textarea name="description" maxlength="2000" rows="3"></textarea></label>
+      <p id="exhibition-form-status" role="status"></p>
+      <button type="submit" class="primary">전시 저장하기</button>
+    </form>
+  </dialog>
+
+  <dialog id="exhibition-detail" class="exhibition-detail" aria-labelledby="exhibition-detail-title">
+    <div class="exhibition-detail-head">
+      <span>Exhibition</span>
+      <button id="exhibition-detail-close" type="button" class="close exhibition-detail-close" aria-label="전시 상세 닫기">×</button>
+    </div>
+    <div class="exhibition-detail-layout">
+      <figure class="exhibition-detail-media">
+        <img id="exhibition-detail-image" alt="" hidden>
+        <span id="exhibition-detail-placeholder" class="exhibition-detail-placeholder" aria-hidden="true">EXHIBITION</span>
+      </figure>
+      <div class="exhibition-detail-copy">
+        <p id="exhibition-detail-status" class="exhibition-detail-status"></p>
+        <h2 id="exhibition-detail-title"></h2>
+        <dl class="exhibition-detail-metadata">
+          <div>
+            <dt>장소</dt>
+            <dd id="exhibition-detail-venue"></dd>
+          </div>
+          <div>
+            <dt>기간</dt>
+            <dd id="exhibition-detail-period"></dd>
+          </div>
+        </dl>
+        <p id="exhibition-detail-description" class="exhibition-detail-description"></p>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>

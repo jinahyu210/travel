@@ -3,6 +3,9 @@
   let midnightTimer;
   let editingExhibition = null;
   let shownExhibition = null;
+  let hasLoaded = false;
+  let refreshUntil = 0;
+  const cacheKey = 'gallery:exhibitions:v1';
 
   const statusLabels = {
     upcoming: '예정 전시',
@@ -30,13 +33,16 @@
   }
 
   function archiveDate(item) {
-    const date = element('time', 'archive-date');
-    date.dateTime = item.start_date;
-    const [year, month, day] = item.start_date.split('-');
-    date.append(
-      element('strong', '', `${month}.${day}`),
-      element('span', '', year.slice(-2))
-    );
+    const date = element('div', 'archive-date');
+    date.setAttribute('aria-label', displayPeriod(item));
+    const crossesYear = item.start_date.slice(0, 4) !== item.end_date.slice(0, 4);
+    for (const [index, value] of [item.start_date, item.end_date].entries()) {
+      const time = element('time', '', (index ? '– ' : '') +
+        (crossesYear ? dottedDate(value) : value.slice(5).replace('-', '.')));
+      time.dateTime = value;
+      date.append(time);
+    }
+    if (crossesYear) date.classList.add('archive-date-cross-year');
     return date;
   }
 
@@ -199,17 +205,22 @@
     midnightTimer = setTimeout(() => render(), Math.max(1, nextMidnight - now.getTime()));
   }
 
-  async function load() {
+  async function load(fresh = false) {
     try {
       if (window.galleryStore) exhibitions = await window.galleryStore.listExhibitions();
       else {
-        const response = await fetch('/api/exhibitions');
+        const bypass = fresh || Date.now() < refreshUntil;
+        const response = await fetch('/api/exhibitions' + (bypass ? '?refresh=' + Date.now() : ''),
+          bypass ? {cache: 'no-store'} : {});
         if (!response.ok) throw new Error();
         exhibitions = await response.json();
+        if (fresh) refreshUntil = Date.now() + 30000;
+        try { sessionStorage.setItem(cacheKey, JSON.stringify({savedAt: Date.now(), refreshUntil, items: exhibitions})); } catch {}
       }
+      hasLoaded = true;
       render();
     } catch {
-      document.getElementById('current-exhibitions').textContent = '전시 소식을 불러오지 못했습니다. 새로고침해 주세요.';
+      if (!hasLoaded) document.getElementById('current-exhibitions').textContent = '전시 소식을 불러오지 못했습니다. 새로고침해 주세요.';
     }
   }
 
@@ -278,7 +289,7 @@
         if (!response.ok) throw new Error(result.error || '전시를 저장하지 못했습니다.');
       }
       form.reset();
-      await load();
+      await load(true);
       dialog.close();
       if (editedId) {
         const updated = exhibitions.find(exhibition => exhibition.id === editedId);
@@ -290,8 +301,21 @@
       submit.disabled = false;
     }
   });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
-  window.addEventListener('pageshow', () => render());
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && hasLoaded) render(); });
+  window.addEventListener('pageshow', () => { if (hasLoaded) render(); });
   window.Exhibitions = {render, load};
+  if (!window.galleryStore) {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(cacheKey));
+      if (cached && Date.now() - cached.savedAt < 300000 && Array.isArray(cached.items) &&
+          cached.items.every(item => GalleryRules.exhibitionStatus(item))) {
+        exhibitions = cached.items;
+        refreshUntil = Number(cached.refreshUntil) || 0;
+        hasLoaded = true;
+        render();
+      }
+    } catch {}
+  }
+  if (!hasLoaded) document.getElementById('current-exhibitions').textContent = '전시 소식을 불러오는 중입니다.';
   load();
 })();

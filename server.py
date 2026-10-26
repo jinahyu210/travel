@@ -267,7 +267,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/exhibitions':
             with database() as db:
                 rows = [dict(row) for row in db.execute('SELECT * FROM exhibitions ORDER BY start_date DESC, rowid DESC')]
-            return self.respond(200, rows, cache_control=public_cache)
+            # Public records change infrequently; edited clients use a fresh URL.
+            return self.respond(200, rows, cache_control='public, max-age=0, s-maxage=30, must-revalidate')
         if path == '/api/artworks':
             with database() as db:
                 rows = [dict(row) for row in db.execute('SELECT * FROM artworks ORDER BY created_at DESC, rowid DESC')]

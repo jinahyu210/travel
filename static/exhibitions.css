@@ -232,8 +232,14 @@
 }
 
 .archive-date span,
-.archive-date small {
+.archive-date small,
+.archive-date time + time {
   margin-top: 4px;
+}
+
+.archive-date-cross-year time {
+  font-size: 12px;
+  letter-spacing: -.025em;
 }
 
 .archive-main {

@@ -11,6 +11,8 @@ import secrets
 import sqlite3
 from io import BytesIO
 from datetime import date
+from contextlib import contextmanager
+from threading import Lock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 from urllib.error import HTTPError, URLError
@@ -56,7 +58,7 @@ if CLOUD:
     for key in ['SUPABASE_DB_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GALLERY_ADMIN_PASSWORD']:
         if not os.environ.get(key):
             raise RuntimeError(f'Missing required server configuration: {key}')
-    from cloud_backend import database, save_image, remove_image, supabase_url, StorageAuthenticationError
+    from cloud_backend import database as connect_database, save_image, remove_image, supabase_url, StorageAuthenticationError, schema_ready
     PASSWORD = os.environ['GALLERY_ADMIN_PASSWORD']
 else:
     DATA = Path(os.environ.get('GALLERY_DATA_DIR', ROOT / '.gallery')).resolve()
@@ -69,14 +71,16 @@ else:
             f.write(secrets.token_urlsafe(24))
     PASSWORD = os.environ.get('GALLERY_ADMIN_PASSWORD') or password_file.read_text().strip()
 
-    def database():
+    def connect_database():
         db = sqlite3.connect(DATA / 'gallery.sqlite3')
         db.row_factory = sqlite3.Row
         return db
 if not PASSWORD:
     raise RuntimeError('Administrator password must not be empty')
 
-with database() as db:
+def initialize_database(db):
+    if CLOUD and schema_ready(db):
+        return
     if CLOUD:
         db.execute('SELECT pg_advisory_xact_lock(73190421)')
     db.execute('CREATE TABLE IF NOT EXISTS series_notes (series TEXT PRIMARY KEY, note TEXT NOT NULL)')
@@ -94,6 +98,39 @@ with database() as db:
         for table in ['artworks', 'exhibitions', 'series_notes', 'messages']:
             db.execute(f'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY')
             db.execute(f'REVOKE ALL ON TABLE {table} FROM anon, authenticated')
+
+
+_schema_ready = False
+_schema_lock = Lock()
+
+
+@contextmanager
+def database_transaction():
+    connection = connect_database()
+    try:
+        with connection as db:
+            yield db
+    finally:
+        # SQLite's transaction context commits/rolls back, but does not close.
+        if not CLOUD:
+            connection.close()
+
+
+@contextmanager
+def database():
+    """Initialize once, using the first request's connection rather than a cold-start connection."""
+    global _schema_ready
+    if _schema_ready:
+        with database_transaction() as db:
+            yield db
+        return
+    # Keep concurrent first requests from observing a migration before it commits.
+    with _schema_lock:
+        with database_transaction() as db:
+            if not _schema_ready:
+                initialize_database(db)
+            yield db
+        _schema_ready = True
 
 
 class ImageValidationError(Exception):
@@ -184,26 +221,42 @@ class Handler(BaseHTTPRequestHandler):
         # Do not log request headers, passwords, or image data.
         super().log_message(fmt, *args)
 
-    def respond(self, status, body, content_type='application/json; charset=utf-8'):
+    def respond(self, status, body, content_type='application/json; charset=utf-8', cache_control='no-store'):
         if isinstance(body, (dict, list)):
-            body = json.dumps(body, ensure_ascii=False).encode()
+            body = json.dumps(body, ensure_ascii=False, separators=(',', ':')).encode()
+        etag = None
+        if status == 200 and cache_control != 'no-store':
+            etag = '"' + hashlib.sha256(body).hexdigest() + '"'
+            candidates = [item.strip().removeprefix('W/') for item in self.headers.get('If-None-Match', '').split(',')]
+            if etag in candidates or '*' in candidates:
+                status = 304
         self.send_response(status)
         self.send_header('Content-Type', content_type)
-        self.send_header('Content-Length', str(len(body)))
+        if status != 304:
+            self.send_header('Content-Length', str(len(body)))
         self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Cache-Control', cache_control)
+        if etag:
+            self.send_header('ETag', etag)
         image_source = urlsplit(os.environ.get('SUPABASE_URL', '')).netloc
         remote_images = f' https://{image_source}' if CLOUD and image_source else ''
         self.send_header('Content-Security-Policy', f"default-src 'self'; img-src 'self' blob:{remote_images}; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
         self.end_headers()
-        self.wfile.write(body)
+        if status != 304:
+            self.wfile.write(body)
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        public_cache = 'public, max-age=0, must-revalidate'
+        if path == '/api/gallery':
+            with database() as db:
+                rows = [dict(row) for row in db.execute('SELECT * FROM artworks ORDER BY created_at DESC, rowid DESC')]
+                notes = {row['series']: row['note'] for row in db.execute('SELECT series,note FROM series_notes')}
+            return self.respond(200, {'artworks': rows, 'seriesNotes': notes}, cache_control=public_cache)
         if path == '/api/series-notes':
             with database() as db:
                 notes = {row['series']: row['note'] for row in db.execute('SELECT series,note FROM series_notes')}
-            return self.respond(200, notes)
+            return self.respond(200, notes, cache_control=public_cache)
         if path == '/api/messages':
             supplied = self.headers.get('Authorization', '').removeprefix('Bearer ')
             if not hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), hashlib.sha256(PASSWORD.encode()).digest()):
@@ -214,25 +267,29 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/exhibitions':
             with database() as db:
                 rows = [dict(row) for row in db.execute('SELECT * FROM exhibitions ORDER BY start_date DESC, rowid DESC')]
-            return self.respond(200, rows)
+            return self.respond(200, rows, cache_control=public_cache)
         if path == '/api/artworks':
             with database() as db:
                 rows = [dict(row) for row in db.execute('SELECT * FROM artworks ORDER BY created_at DESC, rowid DESC')]
-            return self.respond(200, rows)
+            return self.respond(200, rows, cache_control=public_cache)
         static = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
         static.update({'/exhibitions': ('exhibitions.html', 'text/html; charset=utf-8'), '/exhibitions.html': ('exhibitions.html', 'text/html; charset=utf-8'), '/exhibitions.css': ('exhibitions.css', 'text/css; charset=utf-8')})
-        static.update({f'/{name}': (name, 'text/javascript; charset=utf-8') for name in ['gallery-rules.js', 'exhibitions.js']})
+        static.update({f'/{name}': (name, 'text/javascript; charset=utf-8') for name in ['gallery-rules.js', 'gallery-images.js', 'exhibitions.js']})
         static.update({'/contact': ('contact.html', 'text/html; charset=utf-8'), '/contact.html': ('contact.html', 'text/html; charset=utf-8')})
         static['/contact.js'] = ('contact.js', 'text/javascript; charset=utf-8')
         if path in static:
             name, mime = static[path]
-            return self.respond(200, (ROOT / 'static' / name).read_bytes(), mime)
+            return self.respond(200, (ROOT / 'static' / name).read_bytes(), mime, cache_control=public_cache)
+        if not CLOUD and path.startswith('/api/thumbnails/'):
+            from image_delivery import thumbnail_response
+            status, body, mime, cache_control = thumbnail_response(path, DATA / 'images')
+            return self.respond(status, body, mime, cache_control=cache_control)
         if not CLOUD and path.startswith('/images/'):
             name = path.removeprefix('/images/')
             if '/' not in name and name.endswith(('.png', '.jpg', '.webp')):
                 file = DATA / 'images' / name
                 if file.is_file():
-                    return self.respond(200, file.read_bytes(), {'.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'}[file.suffix])
+                    return self.respond(200, file.read_bytes(), {'.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'}[file.suffix], cache_control='public, max-age=31536000, immutable')
         self.respond(404, {'error': '찾을 수 없습니다.'})
 
     def do_POST(self):

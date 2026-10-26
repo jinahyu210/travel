@@ -8,6 +8,32 @@ from urllib.parse import urlsplit
 
 PROJECT_URL = 'https://gpplsvtkejdeqcruhhjh.supabase.co'
 
+SCHEMA_COLUMNS = {
+    'artworks': {'id', 'title', 'artist', 'year', 'description', 'image', 'created_at',
+                 'series', 'medium', 'price', 'dimensions', 'canvas_size'},
+    'exhibitions': {'id', 'title', 'venue', 'start_date', 'end_date', 'description', 'image'},
+    'series_notes': {'series', 'note'},
+    'messages': {'id', 'name', 'reply_to', 'message', 'created_at'},
+}
+
+
+def schema_ready(db):
+    """Check an existing deployment in one trip, including its privacy settings."""
+    rows = db.execute("""
+        SELECT c.relname, c.relrowsecurity,
+               ARRAY(SELECT a.attname FROM pg_attribute a
+                     WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped) AS columns,
+               (has_table_privilege('anon', c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                OR has_table_privilege('authenticated', c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')) AS public_access
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='public' AND c.relname IN ('artworks','exhibitions','series_notes','messages')
+          AND c.relkind='r'
+    """)
+    ready = {row['relname'] for row in rows
+             if row['relrowsecurity'] and not row['public_access']
+             and SCHEMA_COLUMNS[row['relname']].issubset(row['columns'])}
+    return ready == SCHEMA_COLUMNS.keys()
+
 
 class StorageAuthenticationError(ValueError):
     pass

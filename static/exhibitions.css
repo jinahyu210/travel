@@ -1,6 +1,6 @@
 .exhibitions-page {
-  --archive-line: #e7e7e4;
-  --archive-muted: #737373;
+  --archive-line: var(--page-rule);
+  --archive-muted: var(--muted);
   background: #fff;
   color: #292929;
 }
@@ -171,13 +171,14 @@
   transition: background-color .18s ease;
 }
 
-.archive-row:hover {
-  background: #fafafa;
+.archive-row:hover,
+.archive-row:focus-visible {
+  background: var(--surface-hover);
 }
 
 .archive-row:focus-visible {
-  outline: 2px solid #666;
-  outline-offset: 4px;
+  outline: 2px solid var(--focus-color);
+  outline-offset: -2px;
 }
 
 .archive-thumb {
@@ -312,6 +313,7 @@
 
 .archive-summary {
   grid-area: summary;
+  min-width: 0;
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
@@ -339,112 +341,6 @@
   border-bottom: 1px solid var(--archive-line);
   color: var(--archive-muted);
   font-size: 12px;
-}
-
-/* Compatibility while exhibitions.js is upgraded to the archive row markup. */
-.archive-years > .exhibition-row {
-  display: grid;
-  grid-template-columns: 118px minmax(0, 1fr) 120px;
-  align-items: center;
-  gap: clamp(22px, 3vw, 48px);
-  min-height: 154px;
-  padding: 20px 0;
-  border-bottom: 1px solid var(--archive-line);
-}
-
-.archive-years > .exhibition-row + .exhibition-row {
-  border-top: 0;
-}
-
-.exhibition-poster {
-  height: 96px;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  padding: 12px;
-  background: #f2f2f0;
-  color: #8b8b88;
-}
-
-.exhibition-poster > span {
-  font-size: 12px;
-  letter-spacing: .12em;
-}
-
-.exhibition-poster > span:first-child,
-.poster-art {
-  display: none;
-}
-
-.exhibition-info {
-  min-width: 0;
-}
-
-.exhibition-info h3 {
-  margin: 0 0 10px;
-  overflow-wrap: anywhere;
-  font-family: Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  font-size: clamp(18px, 1.65vw, 25px);
-  font-weight: 400;
-  line-height: 1.25;
-  letter-spacing: -.035em;
-}
-
-.exhibition-meta,
-.exhibition-period,
-.exhibition-status {
-  color: var(--archive-muted);
-  font-size: 12px;
-}
-
-.exhibition-meta {
-  margin: 0 0 10px;
-}
-
-.exhibition-period {
-  margin: 10px 0 0;
-}
-
-.exhibition-status {
-  display: inline-block;
-  margin-top: 11px;
-  padding: 3px 6px;
-  border: 1px solid #d8d8d5;
-}
-
-.exhibition-description {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  color: var(--archive-muted);
-  font-size: 12px;
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.archive-years > .exhibition-row > .exhibition-date {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  color: #292929;
-  font-variant-numeric: tabular-nums;
-}
-
-.archive-years > .exhibition-row > .exhibition-date span {
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: .08em;
-}
-
-.archive-years > .exhibition-row > .exhibition-date strong {
-  font-size: 34px;
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -.04em;
 }
 
 .past-section {
@@ -516,8 +412,8 @@
 }
 
 .exhibition-detail-close {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -636,7 +532,7 @@
 
 @media (max-width: 900px) {
   .archive-row {
-    grid-template-columns: 92px 78px minmax(170px, 1fr) minmax(190px, 1fr) 22px;
+    grid-template-columns: 92px 78px minmax(0, 1fr) minmax(0, 1fr) 22px;
     gap: 18px;
   }
 
@@ -732,37 +628,6 @@
   .archive-arrow {
     align-self: center;
     font-size: 17px;
-  }
-
-  .archive-years > .exhibition-row {
-    grid-template-columns: 78px minmax(0, 1fr);
-    gap: 16px;
-    min-height: 0;
-    padding: 18px 0;
-  }
-
-  .exhibition-poster {
-    height: 78px;
-    padding: 8px;
-  }
-
-  .exhibition-info h3 {
-    font-size: 18px;
-  }
-
-  .exhibition-description {
-    font-size: 12px;
-  }
-
-  .archive-years > .exhibition-row > .exhibition-date {
-    grid-column: 1 / -1;
-    flex-direction: row;
-    justify-content: flex-end;
-    align-items: baseline;
-  }
-
-  .archive-years > .exhibition-row > .exhibition-date strong {
-    font-size: 24px;
   }
 
   .past-section {

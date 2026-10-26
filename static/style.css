@@ -167,6 +167,8 @@ label small {
 :root {
   --page-gutter: 5vw;
   --page-rule: #e9e9e9;
+  --surface-hover: #fafafa;
+  --focus-color: #666;
 }
 
 body > header,
@@ -197,6 +199,53 @@ body:not(.exhibitions-page) .intro,
   border-color: var(--page-rule);
 }
 
+/* Match repeated dividers and interaction cues without changing the layout. */
+body > header,
+body:not(.exhibitions-page) > header,
+body > footer,
+body:not(.exhibitions-page) > footer,
+#grid > .card,
+#grid > .series-title,
+#series-gallery,
+#series-gallery > .card {
+  border-color: var(--page-rule);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus,
+textarea:focus,
+select:focus {
+  outline-color: var(--focus-color);
+}
+
+.series-title:focus-within,
+#grid .card:focus-visible,
+.close:hover,
+.close:focus-visible,
+.navigation button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.series-title-link:focus-visible {
+  outline: none;
+}
+
+.series-title-link:focus-visible::after {
+  outline: 2px solid var(--focus-color);
+  outline-offset: -2px;
+}
+
+.primary:hover:not(:disabled) {
+  background: #1f1f1f;
+}
+
+.close {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
 @media(min-width:1600px) {
   :root {
     --page-gutter: 80px;
@@ -206,5 +255,9 @@ body:not(.exhibitions-page) .intro,
 @media(max-width:700px) {
   :root {
     --page-gutter: 24px;
+  }
+
+  .footer-brand span {
+    display: inline;
   }
 }

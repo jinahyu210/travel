@@ -2,6 +2,7 @@
 import os, tempfile, sys, threading, json, base64
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from unittest.mock import patch
 import pgserver, psycopg
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -58,10 +59,40 @@ assert removed_images == [original_exhibition_image.rsplit('/',1)[1]]
 assert call('messages',dict(message='private'))[0] == 201
 assert call('messages')[0] == 401
 assert call('messages',admin=True)[1][0]['message'] == 'private'
+
+# Simulate a new function instance against the migrated database. It must only
+# inspect the schema once, with no lock/DDL before serving the combined read.
+import cloud_backend
+with server.connect_database() as db:
+    assert cloud_backend.schema_ready(db)
+queries = []
+execute = cloud_backend.Database.execute
+def record_execute(self, query, values=()):
+    queries.append(query)
+    return execute(self, query, values)
+server._schema_ready = False
+with patch.object(cloud_backend.Database, 'execute', record_execute):
+    status, gallery = call('gallery')
+assert status == 200, (status, gallery)
+assert gallery['artworks'][0]['id'] == created['id']
+assert gallery['seriesNotes'] == {'관계': '작가노트'}
+assert set(gallery) == {'artworks', 'seriesNotes'}
+assert len(queries) == 3, queries
+assert not any(word in query.upper() for query in queries for word in ('CREATE ', 'ALTER ', 'REVOKE ', 'ADVISORY'))
+
+# The fast path must not skip repairs when privacy configuration has drifted.
+with psycopg.connect(uri) as db:
+    db.execute('GRANT SELECT ON messages TO anon')
+with server.connect_database() as db:
+    assert not cloud_backend.schema_ready(db)
+server._schema_ready = False
+assert call('gallery')[0] == 200
+with server.connect_database() as db:
+    assert cloud_backend.schema_ready(db)
 with psycopg.connect(uri) as db:
     assert db.execute("SELECT column_default FROM information_schema.columns WHERE table_name='exhibitions' AND column_name='image'").fetchone() is not None
     assert db.execute("SELECT relrowsecurity FROM pg_class WHERE relname='messages'").fetchone()[0]
     assert not db.execute("SELECT has_table_privilege('anon','messages','SELECT')").fetchone()[0]
 http.shutdown()
 pg.cleanup()
-print('PostgreSQL + rewritten Vercel API: create/read/edit/rename/notes/exhibitions/private messages passed. Storage upload mocked.')
+print('PostgreSQL + rewritten Vercel API: create/read/edit/rename/notes/exhibitions/private messages, 3-query cold gallery fast path, and privacy repair passed. Storage upload mocked.')

@@ -67,7 +67,7 @@
     dialog.showModal();
   }
 
-  function exhibitionRow(item, status) {
+  function exhibitionRow(item, status, priority = false) {
     const row = element('article', 'archive-item');
     const link = element('a', 'archive-row');
     link.href = `#exhibition-${item.id || item.start_date}`;
@@ -77,9 +77,8 @@
     const thumb = element('figure', 'archive-thumb');
     if (item.image) {
       const image = element('img');
-      image.src = item.image;
       image.alt = '';
-      image.loading = 'lazy';
+      GalleryImages.setSource(image, item.image, {priority});
       thumb.append(image);
     } else {
       thumb.classList.add('archive-thumb-empty');
@@ -137,12 +136,12 @@
       const add = element('button', 'quiet', '전시 등록 ↗');
       add.id = 'exhibition-add';
       add.type = 'button';
-      add.addEventListener('click', openRegistration);
+      add.addEventListener('click', () => openRegistration());
       labelGroup.append(add);
     }
     heading.append(labelGroup, title);
     const list = element('div', 'archive-list');
-    list.append(...items.map(({item, status}) => exhibitionRow(item, status)));
+    list.append(...items.map(({item, status}, index) => exhibitionRow(item, status, allowRegistration && index === 0)));
     section.setAttribute('aria-labelledby', titleId);
     section.append(heading, list);
     return section;

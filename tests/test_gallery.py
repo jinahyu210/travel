@@ -45,8 +45,8 @@ class GalleryTest(unittest.TestCase):
         self.process.wait(timeout=5)
         self.data.cleanup()
 
-    def request(self, path, payload=None, password=None):
-        headers = {}
+    def request(self, path, payload=None, password=None, headers=None):
+        headers = dict(headers or {})
         if password is not None:
             headers['Authorization'] = 'Bearer ' + password
         body = None if payload is None else json.dumps(payload).encode()
@@ -59,6 +59,39 @@ class GalleryTest(unittest.TestCase):
 
     def artwork(self, **changes):
         return dict(title='고요한 아침', artist='김화가', year='2026', description='<script>untrusted</script>', image=base64.b64encode(PNG).decode(), **changes)
+
+    def test_gallery_bundle_revalidates_after_edits_without_exposing_messages(self):
+        payload = self.artwork(series='관계')
+        status, created, _ = self.request('/api/artworks', payload, 'test-only-password')
+        self.assertEqual(status, 201)
+        identifier = json.loads(created)['id']
+        self.request('/api/series-notes', {'series': '관계', 'note': '작가노트'}, 'test-only-password')
+        self.request('/api/messages', {'message': '비공개 메모'})
+
+        status, body, headers = self.request('/api/gallery')
+        self.assertEqual(status, 200)
+        bundle = json.loads(body)
+        self.assertEqual(set(bundle), {'artworks', 'seriesNotes'})
+        self.assertEqual(bundle['artworks'][0]['id'], identifier)
+        self.assertEqual(bundle['seriesNotes'], {'관계': '작가노트'})
+        self.assertNotIn('비공개 메모', body.decode())
+        self.assertEqual(headers['Cache-Control'], 'public, max-age=0, must-revalidate')
+        etag = headers['ETag']
+        status, body, _ = self.request('/api/gallery', headers={'If-None-Match': 'W/' + etag})
+        self.assertEqual((status, body), (304, b''))
+
+        edit = dict(payload, id=identifier, title='수정된 작품')
+        del edit['image']
+        self.assertEqual(self.request('/api/artworks/update', edit, 'test-only-password')[0], 200)
+        status, body, changed = self.request('/api/gallery', headers={'If-None-Match': etag})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)['artworks'][0]['title'], '수정된 작품')
+        self.assertNotEqual(changed['ETag'], etag)
+
+        status, _, private = self.request('/api/messages', password='test-only-password')
+        self.assertEqual(status, 200)
+        self.assertEqual(private['Cache-Control'], 'no-store')
+        self.assertIsNone(private['ETag'])
 
     def test_heic_container_detection_does_not_trust_extension(self):
         self.assertTrue(is_heif(b'\x00\x00\x00\x18ftypheic' + b'\x00' * 12))

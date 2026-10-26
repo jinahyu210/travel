@@ -208,11 +208,12 @@ $('detail').addEventListener('keydown', event => {
     navigateArtwork(event.key === 'ArrowLeft' ? -1 : 1);
   }
 });
-function artworkCard(artwork, open) {
+function artworkCard(artwork, open, priority = false) {
   const card = document.createElement('button'); card.className = 'card';
   card.setAttribute('aria-label', artwork.title || seriesName(artwork));
   const imageFrame = document.createElement('div'); imageFrame.className = 'image-frame';
-  const img = document.createElement('img'); img.src = artwork.image; img.alt = artwork.title; img.loading = 'lazy';
+  const img = document.createElement('img'); img.alt = artwork.title;
+  GalleryImages.setSource(img, artwork.image, {priority});
   imageFrame.append(img);
   const title = document.createElement('h3'); title.textContent = artwork.title;
   const year = document.createElement('p'); year.className = 'caption-year'; year.textContent = artwork.year || '';
@@ -234,7 +235,7 @@ function openSeries(name, trigger) {
   overviewScroll = window.scrollY;
   $('series-title').textContent = name;
   updateSeriesNote();
-  seriesGallery.replaceChildren(...works.map(a => artworkCard(a, showArtwork)));
+  seriesGallery.replaceChildren(...works.map((a, index) => artworkCard(a, showArtwork, index === 0)));
   document.querySelector('.intro').hidden = true;
   document.querySelector('.collection').hidden = true;
   $('series-view').hidden = false;
@@ -255,10 +256,10 @@ function closeSeries() {
 }
 $('series-back').addEventListener('click', closeSeries);
 function render() {
-  updateSeriesOptions();
   const query = $('search').value.trim().toLocaleLowerCase();
   const visible = artworks.filter(a => `${a.title} ${a.series || ''} ${a.year}`.toLocaleLowerCase().includes(query));
-  gallery.replaceChildren();
+  const fragment = document.createDocumentFragment();
+  let firstImage = true;
   $('count').textContent = String(visible.length);
   $('status').hidden = visible.length > 0 || !query;
   $('status').textContent = query && !visible.length ? '검색한 작품이 없습니다.' : '';
@@ -278,15 +279,20 @@ function render() {
     link.append(title,arrow); panel.append(number,link);
     const preview = notePreview(name); if (preview) panel.append(preview);
     link.addEventListener('click', () => openSeries(name, link));
-    gallery.append(panel, ...works.map(a => artworkCard(a, showArtwork)));
+    fragment.append(panel, ...works.map(a => {
+      const card = artworkCard(a, showArtwork, firstImage);
+      firstImage = false;
+      return card;
+    }));
   });
+  gallery.replaceChildren(fragment);
   if (activeSeries !== null) {
     const works = artworks.filter(a => seriesName(a) === activeSeries);
     if (!works.length) closeSeries();
     else {
       $('series-title').textContent = activeSeries;
       updateSeriesNote();
-      seriesGallery.replaceChildren(...works.map(a => artworkCard(a, showArtwork)));
+      seriesGallery.replaceChildren(...works.map((a, index) => artworkCard(a, showArtwork, index === 0)));
       requestAnimationFrame(updateNavigation);
     }
   }
@@ -294,11 +300,14 @@ function render() {
 async function load() {
   try {
     if (window.galleryStore) {
-      [artworks,seriesNotes] = await Promise.all([window.galleryStore.list(),window.galleryStore.listNotes()]); render(); return;
+      [artworks,seriesNotes] = await Promise.all([window.galleryStore.list(),window.galleryStore.listNotes()]);
+    } else {
+      const response = await fetch('/api/gallery');
+      if (!response.ok) throw new Error();
+      ({artworks, seriesNotes} = await response.json());
     }
-    const [response,notesResponse] = await Promise.all([fetch('/api/artworks'),fetch('/api/series-notes')]);
-    if (!response.ok || !notesResponse.ok) throw new Error();
-    [artworks,seriesNotes] = await Promise.all([response.json(),notesResponse.json()]); render();
+    updateSeriesOptions();
+    render();
   } catch { $('status').hidden = false; $('status').textContent = '작품을 불러오지 못했습니다. 새로고침해 주세요.'; }
 }
 async function openArtworkForm(artwork = null) {
@@ -406,7 +415,11 @@ $('series-rename-form').addEventListener('submit', async event => {
   } catch (error) { $('rename-status').textContent = error.message || '제목을 수정하지 못했습니다.'; }
   finally { submit.disabled = false; }
 });
-$('search').addEventListener('input', render);
+let searchFrame;
+$('search').addEventListener('input', () => {
+  cancelAnimationFrame(searchFrame);
+  searchFrame = requestAnimationFrame(render);
+});
 $('upload-form').addEventListener('submit', async event => {
   event.preventDefault(); const form = event.currentTarget; const submit = form.querySelector('[type=submit]');
   $('upload-status').textContent = ''; const file = form.elements.file.files[0];

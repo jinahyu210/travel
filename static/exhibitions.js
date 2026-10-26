@@ -5,6 +5,7 @@
   let shownExhibition = null;
   let hasLoaded = false;
   let refreshUntil = 0;
+  let loadRequest = 0;
   const cacheKey = 'gallery:exhibitions:v1';
 
   const statusLabels = {
@@ -84,7 +85,7 @@
     if (item.image) {
       const image = element('img');
       image.alt = '';
-      GalleryImages.setSource(image, item.image, {priority});
+      GalleryImages.setSource(image, item.image, {priority, compact: true});
       thumb.append(image);
     } else {
       thumb.classList.add('archive-thumb-empty');
@@ -206,6 +207,7 @@
   }
 
   async function load(fresh = false) {
+    const request = ++loadRequest;
     try {
       if (window.galleryStore) exhibitions = await window.galleryStore.listExhibitions();
       else {
@@ -213,7 +215,9 @@
         const response = await fetch('/api/exhibitions' + (bypass ? '?refresh=' + Date.now() : ''),
           bypass ? {cache: 'no-store'} : {});
         if (!response.ok) throw new Error();
-        exhibitions = await response.json();
+        const next = await response.json();
+        if (request !== loadRequest) return;
+        exhibitions = next;
         if (fresh) refreshUntil = Date.now() + 30000;
         try { sessionStorage.setItem(cacheKey, JSON.stringify({savedAt: Date.now(), refreshUntil, items: exhibitions})); } catch {}
       }

@@ -14,7 +14,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 MAX_SOURCE_BYTES = 3_000_000
 MAX_SOURCE_PIXELS = 60_000_000
 THUMBNAIL_CACHE = 'public, max-age=31536000, s-maxage=31536000, immutable'
-PATH_PATTERN = re.compile(r'/api/thumbnails/(640|1280)/((?:exhibition-)?[0-9a-f]{32}\.(?:png|jpg|webp))')
+PATH_PATTERN = re.compile(r'/api/thumbnails/(320|640|1280)/((?:exhibition-)?[0-9a-f]{32}\.(?:png|jpg|webp))')
 # Large PNG/WebP sources still need a full decode. Keep those buffers from
 # multiplying when a warm server handles several new thumbnails together.
 DECODE_SLOTS = BoundedSemaphore(1)

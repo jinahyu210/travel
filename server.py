@@ -252,7 +252,7 @@ class Handler(BaseHTTPRequestHandler):
             with database() as db:
                 rows = [dict(row) for row in db.execute('SELECT * FROM artworks ORDER BY created_at DESC, rowid DESC')]
                 notes = {row['series']: row['note'] for row in db.execute('SELECT series,note FROM series_notes')}
-            return self.respond(200, {'artworks': rows, 'seriesNotes': notes}, cache_control=public_cache)
+            return self.respond(200, {'artworks': rows, 'seriesNotes': notes}, cache_control='public, max-age=0, s-maxage=30, must-revalidate')
         if path == '/api/series-notes':
             with database() as db:
                 notes = {row['series']: row['note'] for row in db.execute('SELECT series,note FROM series_notes')}

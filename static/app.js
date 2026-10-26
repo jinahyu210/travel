@@ -297,18 +297,29 @@ function render() {
     }
   }
 }
-async function load() {
+const galleryCacheKey = 'gallery:works:v1';
+let galleryRefreshUntil = 0;
+let galleryLoaded = false;
+let galleryRequest = 0;
+async function load(fresh = false) {
+  const request = ++galleryRequest;
   try {
     if (window.galleryStore) {
       [artworks,seriesNotes] = await Promise.all([window.galleryStore.list(),window.galleryStore.listNotes()]);
     } else {
-      const response = await fetch('/api/gallery');
+      const bypass = fresh || Date.now() < galleryRefreshUntil;
+      const response = await fetch('/api/gallery' + (bypass ? '?refresh=' + Date.now() : ''), bypass ? {cache:'no-store'} : {});
       if (!response.ok) throw new Error();
-      ({artworks, seriesNotes} = await response.json());
+      const next = await response.json();
+      if (request !== galleryRequest) return;
+      ({artworks, seriesNotes} = next);
+      if (fresh) galleryRefreshUntil = Date.now() + 30000;
+      try { localStorage.setItem(galleryCacheKey, JSON.stringify({savedAt:Date.now(), refreshUntil:galleryRefreshUntil, artworks, seriesNotes})); } catch {}
     }
+    galleryLoaded = true;
     updateSeriesOptions();
     render();
-  } catch { $('status').hidden = false; $('status').textContent = '작품을 불러오지 못했습니다. 새로고침해 주세요.'; }
+  } catch { if (!galleryLoaded) { $('status').hidden = false; $('status').textContent = '작품을 불러오지 못했습니다. 새로고침해 주세요.'; } }
 }
 async function openArtworkForm(artwork = null) {
   const form = $('upload-form');
@@ -371,7 +382,7 @@ $('note-form').addEventListener('submit', async event => {
       const response = await fetch('/api/series-notes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${form.elements.notePassword.value}`},body:JSON.stringify({series,note})});
       const result = await response.json(); if (!response.ok) throw new Error(result.error || '작가노트를 저장하지 못했습니다.');
     }
-    await load();
+    await load(true);
     if (!$('note-view').hidden) {
       if (noteFor(noteSeries)) $('note-full-text').textContent = noteFor(noteSeries);
       else closeArtistNote();
@@ -410,7 +421,7 @@ $('series-rename-form').addEventListener('submit', async event => {
       if (!response.ok) throw new Error(result.error || '제목을 수정하지 못했습니다.');
     }
     if (activeSeries !== null) closeSeries();
-    await load();
+    await load(true);
     $('rename-dialog').close();
   } catch (error) { $('rename-status').textContent = error.message || '제목을 수정하지 못했습니다.'; }
   finally { submit.disabled = false; }
@@ -442,7 +453,7 @@ $('upload-form').addEventListener('submit', async event => {
     }
     const editedId = editingArtwork?.id;
     if (editedId && activeSeries !== null) activeSeries = payload.series || 'Works';
-    await load(); $('upload').close();
+    await load(true); $('upload').close();
     if (editedId) {
       const updated = artworks.find(a => a.id === editedId);
       if (updated) showArtwork(updated);
@@ -450,6 +461,21 @@ $('upload-form').addEventListener('submit', async event => {
   } catch (error) { $('upload-status').textContent = error.message || '등록하지 못했습니다. 다시 시도해 주세요.'; }
   finally { submit.disabled = false; }
 });
+if (!window.galleryStore) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(galleryCacheKey));
+    if (cached && Date.now() - cached.savedAt < 300000 && Array.isArray(cached.artworks) &&
+        cached.artworks.every(item => item && typeof item.title === 'string' && typeof item.image === 'string') &&
+        cached.seriesNotes && typeof cached.seriesNotes === 'object') {
+      artworks = cached.artworks;
+      seriesNotes = cached.seriesNotes;
+      galleryRefreshUntil = Number(cached.refreshUntil) || 0;
+      updateSeriesOptions();
+      render();
+      galleryLoaded = true;
+    }
+  } catch {}
+}
 load().then(() => {
   const url = new URL(window.location.href);
   if (url.searchParams.get('register') === '1') {

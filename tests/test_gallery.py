@@ -75,7 +75,7 @@ class GalleryTest(unittest.TestCase):
         self.assertEqual(bundle['artworks'][0]['id'], identifier)
         self.assertEqual(bundle['seriesNotes'], {'관계': '작가노트'})
         self.assertNotIn('비공개 메모', body.decode())
-        self.assertEqual(headers['Cache-Control'], 'public, max-age=0, must-revalidate')
+        self.assertEqual(headers['Cache-Control'], 'public, max-age=0, s-maxage=30, must-revalidate')
         etag = headers['ETag']
         status, body, _ = self.request('/api/gallery', headers={'If-None-Match': 'W/' + etag})
         self.assertEqual((status, body), (304, b''))

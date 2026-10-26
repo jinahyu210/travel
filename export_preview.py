@@ -12,6 +12,7 @@ html = html.replace('<link rel="stylesheet" href="./style.css">', '<style>' + (s
 html = html.replace('<script defer src="./app.js"></script>', '')
 html = html.replace('<script defer src="./gallery-rules.js"></script>', '')
 html = html.replace('<script defer src="./gallery-images.js"></script>', '')
+html = html.replace('<link rel="preload" href="/api/gallery" as="fetch" crossorigin="anonymous">', '')
 script = (static / 'app.js').read_text()
 # Use registered works when available. Until then, show neutral layout frames,
 # never invented paintings or biographical information attributed to the artist.

@@ -14,7 +14,7 @@
     return url.pathname === prefix + filename ? filename : null;
   }
 
-  function setSource(image, source, {priority = false} = {}) {
+  function setSource(image, source, {priority = false, compact = false} = {}) {
     image.decoding = 'async';
     image.loading = priority ? 'eager' : 'lazy';
     image.fetchPriority = priority ? 'high' : 'auto';
@@ -24,8 +24,9 @@
         image.removeAttribute('srcset');
         image.src = source;
       }, {once: true});
-      image.srcset = `/api/thumbnails/640/${filename} 1x, /api/thumbnails/1280/${filename} 2x`;
-      image.src = `/api/thumbnails/640/${filename}`;
+      const size = compact ? 320 : 640;
+      image.srcset = `/api/thumbnails/${size}/${filename} 1x, /api/thumbnails/${size * 2}/${filename} 2x`;
+      image.src = `/api/thumbnails/${size}/${filename}`;
     } else image.src = source;
   }
 

@@ -114,6 +114,7 @@
   function openRegistration(item = null) {
     form.reset();
     editingExhibition = item;
+    document.getElementById('delete-exhibition').hidden = !item;
     document.getElementById('exhibition-form-status').textContent = '';
     document.getElementById('exhibition-form-title').textContent = item ? '전시 편집' : '전시 등록';
     document.getElementById('exhibition-submit').textContent = item ? '수정 저장하기' : '전시 저장하기';
@@ -228,18 +229,28 @@
     }
   }
 
-  function readImage(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = () => reject(new Error('이미지 파일을 읽지 못했습니다. 다시 선택해 주세요.'));
-      reader.readAsDataURL(file);
-    });
-  }
-
   const form = document.getElementById('exhibition-form');
   const dialog = document.getElementById('exhibition-dialog');
   const detail = document.getElementById('exhibition-detail');
+  const deleteButton = document.getElementById('delete-exhibition');
+  deleteButton.addEventListener('click', async () => {
+    if (!editingExhibition) return;
+    if (!window.galleryStore && !form.elements.exhibitionPassword.reportValidity()) return;
+    if (!confirm(`“${editingExhibition.title}” 전시를 삭제할까요? 사진과 전시 정보가 삭제되며 복구할 수 없습니다.`)) return;
+    const id = editingExhibition.id;
+    deleteButton.disabled = true;
+    form.querySelector('[type=submit]').disabled = true;
+    try {
+      if (window.galleryStore) await window.galleryStore.removeExhibition(id);
+      else await GalleryUpload.request('/api/exhibitions/delete', {id}, form.elements.exhibitionPassword.value);
+      exhibitions = exhibitions.filter(item => item.id !== id);
+      try { sessionStorage.removeItem(cacheKey); } catch {}
+      render();
+      dialog.close();
+      await load(true);
+    } catch (error) { document.getElementById('exhibition-form-status').textContent = error.message; }
+    finally { deleteButton.disabled = false; form.querySelector('[type=submit]').disabled = false; }
+  });
   dialog.querySelector('.close').addEventListener('click', () => dialog.close());
   detail.querySelector('.close').addEventListener('click', () => detail.close());
   [dialog, detail].forEach(modal => modal.addEventListener('click', event => {
@@ -270,14 +281,15 @@
       status.textContent = '전시명, 장소와 올바른 시작일·종료일을 입력해 주세요.';
       return;
     }
-    if (file && file.size > 3_000_000) {
-      status.textContent = '이미지는 3MB 이하로 올려 주세요.';
+    if (file && file.size > 10_000_000) {
+      status.textContent = '이미지는 10MB 이하로 올려 주세요.';
       return;
     }
     submit.disabled = true;
+    deleteButton.disabled = true;
+    const editedId = editingExhibition?.id;
     try {
-      if (file) item.image = await readImage(file);
-      const editedId = editingExhibition?.id;
+      if (file) item.image = await GalleryUpload.image(file, form.elements.exhibitionPassword.value, status);
       if (window.galleryStore) {
         if (editedId) await window.galleryStore.updateExhibition(editedId, item);
         else await window.galleryStore.createExhibition(item);
@@ -303,6 +315,7 @@
       status.textContent = error.message || '전시를 저장하지 못했습니다.';
     } finally {
       submit.disabled = false;
+      deleteButton.disabled = false;
     }
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && hasLoaded) render(); });

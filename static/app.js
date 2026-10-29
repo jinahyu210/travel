@@ -327,6 +327,7 @@ async function openArtworkForm(artwork = null) {
   form.reset();
   await Promise.resolve(); // Let reset handlers finish before filling an existing work.
   editingArtwork = artwork;
+  $('delete-artwork').hidden = !artwork;
   $('upload-title').textContent = artwork ? '작품 편집' : '새로운 작품 등록';
   form.querySelector('[type=submit]').textContent = artwork ? '수정 저장하기' : '작품 등록하기 ↗';
   form.elements.file.required = !artwork;
@@ -356,6 +357,25 @@ $('edit-artwork').addEventListener('click', () => {
 });
 document.querySelectorAll('.close').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
 $('upload').addEventListener('close', () => { $('upload-form').elements.password.value = ''; });
+$('delete-artwork').addEventListener('click', async () => {
+  if (!editingArtwork) return;
+  const form = $('upload-form'), button = $('delete-artwork');
+  if (!window.galleryStore && !form.elements.password.reportValidity()) return;
+  if (!confirm(`“${editingArtwork.title}” 작품을 삭제할까요? 사진과 작품 정보가 삭제되며 복구할 수 없습니다.`)) return;
+  const id = editingArtwork.id;
+  button.disabled = true;
+  form.querySelector('[type=submit]').disabled = true;
+  try {
+    if (window.galleryStore) await window.galleryStore.remove(id);
+    else await GalleryUpload.request('/api/artworks/delete', {id}, form.elements.password.value);
+    artworks = artworks.filter(item => item.id !== id);
+    try { localStorage.removeItem(galleryCacheKey); } catch {}
+    render();
+    $('upload').close();
+    await load(true);
+  } catch (error) { $('upload-status').textContent = error.message; }
+  finally { button.disabled = false; form.querySelector('[type=submit]').disabled = false; }
+});
 function openNoteEditor(name) {
   $('note-status').textContent = '';
   $('note-series-select').value = name || '';
@@ -435,23 +455,24 @@ $('upload-form').addEventListener('submit', async event => {
   event.preventDefault(); const form = event.currentTarget; const submit = form.querySelector('[type=submit]');
   $('upload-status').textContent = ''; const file = form.elements.file.files[0];
   if (!file && !editingArtwork) { $('upload-status').textContent = '작품 이미지를 선택해 주세요.'; return; }
-  if (file && file.size > 3_000_000) { $('upload-status').textContent = '이미지는 3MB 이하로 올려 주세요.'; return; }
+  if (file && file.size > 10_000_000) { $('upload-status').textContent = '이미지는 10MB 이하로 올려 주세요.'; return; }
   submit.disabled = true;
+  $('delete-artwork').disabled = true;
+  const editedId = editingArtwork?.id;
   try {
     const payload = {};
-    if (file) payload.image = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result.split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file); });
     ['title','artist','series','year','medium','price','dimensions','canvas_size','description'].forEach(key => payload[key] = form.elements[key].value);
     payload.series = $('series-select').value === 'new' ? payload.series.trim() : $('series-select').value.slice(7);
     if ($('series-select').value === 'new' && !payload.series) throw new Error('새 시리즈 제목을 입력해 주세요.');
+    if (file) payload.image = await GalleryUpload.image(file, form.elements.password.value, $('upload-status'));
     if (window.galleryStore) {
-      if (editingArtwork) await window.galleryStore.update(editingArtwork.id, payload);
+      if (editedId) await window.galleryStore.update(editedId, payload);
       else await window.galleryStore.create(payload);
     } else {
-      if (editingArtwork) payload.id = editingArtwork.id;
-      const response = await fetch(editingArtwork ? '/api/artworks/update' : '/api/artworks', {method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${form.elements.password.value}`}, body:JSON.stringify(payload)});
+      if (editedId) payload.id = editedId;
+      const response = await fetch(editedId ? '/api/artworks/update' : '/api/artworks', {method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${form.elements.password.value}`}, body:JSON.stringify(payload)});
       const result = await response.json(); if (!response.ok) throw new Error(result.error || '등록하지 못했습니다.');
     }
-    const editedId = editingArtwork?.id;
     if (editedId && activeSeries !== null) activeSeries = payload.series || 'Works';
     await load(true); $('upload').close();
     if (editedId) {
@@ -459,7 +480,7 @@ $('upload-form').addEventListener('submit', async event => {
       if (updated) showArtwork(updated);
     }
   } catch (error) { $('upload-status').textContent = error.message || '등록하지 못했습니다. 다시 시도해 주세요.'; }
-  finally { submit.disabled = false; }
+  finally { submit.disabled = false; $('delete-artwork').disabled = false; }
 });
 if (!window.galleryStore) {
   try {

@@ -118,6 +118,44 @@ class GalleryTest(unittest.TestCase):
         self.start()
         self.assertEqual(len(json.loads(self.request('/api/artworks')[1])), 1)
 
+    def test_delete_requires_admin_and_removes_only_selected_record_and_image(self):
+        password = 'test-only-password'
+        self.request('/api/artworks', self.artwork(series='관계'), password)
+        self.request('/api/artworks', self.artwork(series='관계'), password)
+        self.request('/api/series-notes', {'series': '관계', 'note': '보존할 작가노트'}, password)
+        works = json.loads(self.request('/api/artworks')[1])
+        identifier = {'id': works[0]['id']}
+        self.assertEqual(self.request('/api/artworks/delete', identifier)[0], 401)
+        self.assertEqual(self.request('/api/artworks/delete', identifier, 'wrong')[0], 401)
+        self.assertEqual(self.request('/api/artworks/delete', identifier, password)[0], 200)
+        self.assertEqual(self.request(works[0]['image'])[0], 404)
+        self.assertEqual(self.request(works[1]['image'])[0], 200)
+        self.assertEqual(len(json.loads(self.request('/api/artworks')[1])), 1)
+        self.assertEqual(json.loads(self.request('/api/series-notes')[1])['관계'], '보존할 작가노트')
+        self.assertEqual(self.request('/api/artworks/delete', identifier, password)[0], 404)
+
+        exhibition = dict(title='전시', venue='서울', start_date='2026-10-01', end_date='2026-10-28', image=base64.b64encode(PNG).decode())
+        self.request('/api/exhibitions', exhibition, password)
+        item = json.loads(self.request('/api/exhibitions')[1])[0]
+        self.assertEqual(self.request('/api/exhibitions/delete', {'id': item['id']})[0], 401)
+        self.assertEqual(self.request('/api/exhibitions/delete', {'id': item['id']}, password)[0], 200)
+        self.assertEqual(self.request(item['image'])[0], 404)
+        self.assertEqual(json.loads(self.request('/api/exhibitions')[1]), [])
+
+        self.request('/api/messages', {'message': '메모'})
+        item = json.loads(self.request('/api/messages', password=password)[1])[0]
+        self.assertEqual(self.request('/api/messages/delete', {'id': item['id']})[0], 401)
+        self.assertEqual(self.request('/api/messages/delete', {'id': item['id']}, password)[0], 200)
+        self.assertEqual(json.loads(self.request('/api/messages', password=password)[1]), [])
+
+    def test_local_upload_accepts_ten_mb_and_rejects_larger(self):
+        payload = self.artwork()
+        raw = PNG + b'\0' * (10_000_000 - len(PNG))
+        payload['image'] = base64.b64encode(raw).decode()
+        self.assertEqual(self.request('/api/artworks', payload, 'test-only-password')[0], 201)
+        payload['image'] = base64.b64encode(raw + b'\0').decode()
+        self.assertEqual(self.request('/api/artworks', payload, 'test-only-password')[0], 400)
+
     def test_reject_invalid_data_and_path_traversal(self):
         payload = self.artwork()
         payload['image'] = base64.b64encode(b'<svg/>').decode()

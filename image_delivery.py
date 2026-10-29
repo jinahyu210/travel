@@ -11,7 +11,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-MAX_SOURCE_BYTES = 3_000_000
+MAX_SOURCE_BYTES = 10_000_000
 MAX_SOURCE_PIXELS = 60_000_000
 THUMBNAIL_CACHE = 'public, max-age=31536000, s-maxage=31536000, immutable'
 PATH_PATTERN = re.compile(r'/api/thumbnails/(320|640|1280)/((?:exhibition-)?[0-9a-f]{32}\.(?:png|jpg|webp))')

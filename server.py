@@ -8,6 +8,7 @@ import os
 import re
 from pathlib import Path
 import secrets
+import time
 import sqlite3
 from io import BytesIO
 from datetime import date
@@ -19,7 +20,7 @@ from urllib.error import HTTPError, URLError
 
 ROOT = Path(__file__).resolve().parent
 CLOUD = bool(os.environ.get('VERCEL') or os.environ.get('SUPABASE_DB_URL'))
-MAX_IMAGE_BYTES = 3_000_000
+MAX_IMAGE_BYTES = 10_000_000
 
 def is_heif(raw):
     """Recognize HEIC/HEIF containers without trusting the file extension."""
@@ -141,15 +142,40 @@ class ImageStorageError(Exception):
     pass
 
 
-def save_uploaded_image(encoded, prefix=''):
-    if not isinstance(encoded, str):
-        raise ImageValidationError('이미지 파일을 다시 선택해 주세요.')
+def upload_signature(value):
+    return hmac.new(PASSWORD.encode(), ('gallery-upload:' + value).encode(), hashlib.sha256).hexdigest()
+
+
+def read_signed_upload(token):
+    if not isinstance(token, str) or not re.fullmatch(r'[0-9a-f]{32}\.[0-9]{10}\.[0-9a-f]{64}', token):
+        raise ImageValidationError('사진 업로드 정보를 확인해 주세요.')
+    filename, expiry, signature = token.split('.')
+    if int(expiry) < time.time() or not hmac.compare_digest(signature, upload_signature(filename + '.' + expiry)):
+        raise ImageValidationError('사진 업로드가 만료되었습니다. 다시 등록해 주세요.')
+    from cloud_backend import read_upload, remove_upload
     try:
-        raw = base64.b64decode(encoded, validate=True)
-    except (binascii.Error, ValueError):
-        raise ImageValidationError('이미지 파일을 읽지 못했습니다. 다시 선택해 주세요.') from None
+        return read_upload(filename)
+    except (HTTPError, URLError):
+        raise ImageStorageError('업로드한 사진을 읽지 못했습니다. 다시 등록해 주세요.') from None
+    finally:
+        try:
+            remove_upload(filename)
+        except Exception:
+            pass
+
+
+def save_uploaded_image(encoded, prefix=''):
+    if CLOUD and isinstance(encoded, dict):
+        raw = read_signed_upload(encoded.get('upload_token'))
+    else:
+        if not isinstance(encoded, str):
+            raise ImageValidationError('이미지 파일을 다시 선택해 주세요.')
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError):
+            raise ImageValidationError('이미지 파일을 읽지 못했습니다. 다시 선택해 주세요.') from None
     if not raw or len(raw) > MAX_IMAGE_BYTES:
-        raise ImageValidationError('이미지는 3MB 이하로 올려 주세요.')
+        raise ImageValidationError('이미지는 10MB 이하로 올려 주세요.')
     if is_heif(raw):
         try:
             raw = convert_heif(raw)
@@ -275,7 +301,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, rows, cache_control=public_cache)
         static = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
         static.update({'/exhibitions': ('exhibitions.html', 'text/html; charset=utf-8'), '/exhibitions.html': ('exhibitions.html', 'text/html; charset=utf-8'), '/exhibitions.css': ('exhibitions.css', 'text/css; charset=utf-8')})
-        static.update({f'/{name}': (name, 'text/javascript; charset=utf-8') for name in ['gallery-rules.js', 'gallery-images.js', 'exhibitions.js']})
+        static.update({f'/{name}': (name, 'text/javascript; charset=utf-8') for name in ['gallery-rules.js', 'gallery-images.js', 'gallery-upload.js', 'exhibitions.js']})
         static.update({'/contact': ('contact.html', 'text/html; charset=utf-8'), '/contact.html': ('contact.html', 'text/html; charset=utf-8')})
         static['/contact.js'] = ('contact.js', 'text/javascript; charset=utf-8')
         if path in static:
@@ -315,18 +341,45 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(201, {'status': 'received'})
             except (ValueError, KeyError, TypeError):
                 return self.respond(400, {'error': '메모 내용을 확인해 주세요. 최대 4,000자까지 입력할 수 있습니다.'})
-        if self.path not in ['/api/artworks', '/api/artworks/update', '/api/series/rename', '/api/exhibitions', '/api/exhibitions/update', '/api/series-notes']:
+        delete_tables = {'/api/artworks/delete': 'artworks', '/api/exhibitions/delete': 'exhibitions', '/api/messages/delete': 'messages'}
+        if self.path not in ['/api/artworks', '/api/artworks/update', '/api/series/rename', '/api/exhibitions', '/api/exhibitions/update', '/api/series-notes', '/api/images/sign', *delete_tables]:
             return self.respond(404, {'error': '찾을 수 없습니다.'})
         supplied = self.headers.get('Authorization', '').removeprefix('Bearer ')
         if not hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), hashlib.sha256(PASSWORD.encode()).digest()):
             return self.respond(401, {'error': '관리자 비밀번호를 확인해 주세요.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
-            if size <= 0 or size > 4_100_000:
-                return self.respond(413, {'error': '이미지는 3MB 이하로 올려 주세요.'})
+            if size <= 0 or size > (4_100_000 if CLOUD else 13_500_000):
+                return self.respond(413, {'error': '이미지는 10MB 이하로 올려 주세요. 페이지를 새로고침 후 다시 시도해 주세요.'})
             payload = json.loads(self.rfile.read(size))
             if not isinstance(payload, dict):
                 raise ValueError()
+            if self.path == '/api/images/sign':
+                if not isinstance(payload.get('size'), int) or not 0 < payload['size'] <= MAX_IMAGE_BYTES:
+                    return self.respond(400, {'error': '이미지는 10MB 이하로 올려 주세요.'})
+                if not CLOUD:
+                    return self.respond(200, {'direct': False})
+                from cloud_backend import sign_upload
+                filename = secrets.token_hex(16)
+                value = filename + '.' + str(int(time.time()) + 900)
+                try:
+                    url = sign_upload(filename)
+                except (HTTPError, URLError, ValueError, KeyError):
+                    return self.respond(502, {'error': '사진 업로드 준비에 실패했습니다. 잠시 후 다시 시도해 주세요.'})
+                return self.respond(200, {'direct': True, 'url': url, 'upload_token': value + '.' + upload_signature(value)})
+            if self.path in delete_tables:
+                identifier = payload.get('id')
+                if not isinstance(identifier, str) or not identifier or len(identifier) > 100:
+                    return self.respond(400, {'error': '삭제할 항목을 확인해 주세요.'})
+                table = delete_tables[self.path]
+                with database() as db:
+                    existing = db.execute(f'SELECT * FROM {table} WHERE id=?', (identifier,)).fetchone()
+                    if existing is None:
+                        return self.respond(404, {'error': '이미 삭제되었거나 찾을 수 없는 항목입니다.'})
+                    db.execute(f'DELETE FROM {table} WHERE id=?', (identifier,))
+                if table != 'messages':
+                    discard_existing_image(existing['image'], 'exhibition-' if table == 'exhibitions' else '')
+                return self.respond(200, {'id': identifier, 'deleted': True})
             if self.path == '/api/series-notes':
                 series, note = payload.get('series'), payload.get('note')
                 if not isinstance(series, str) or not series.strip() or len(series) > 120 or not isinstance(note, str) or len(note) > 20000:
@@ -443,6 +496,8 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 discard_uploaded_image(image_path)
                 raise
+            if existing and image_path:
+                discard_existing_image(existing['image'], '')
             self.respond(200 if existing else 201, {'id': artwork_id})
         except (ValueError, KeyError, TypeError):
             self.respond(400, {'error': '작품명, 작가명과 올바른 이미지를 입력해 주세요.'})

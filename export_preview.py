@@ -12,6 +12,7 @@ html = html.replace('<link rel="stylesheet" href="./style.css">', '<style>' + (s
 html = html.replace('<script defer src="./app.js"></script>', '')
 html = html.replace('<script defer src="./gallery-rules.js"></script>', '')
 html = html.replace('<script defer src="./gallery-images.js"></script>', '')
+html = html.replace('<script defer src="./gallery-upload.js"></script>', '')
 html = html.replace('<link rel="preload" href="/api/gallery" as="fetch" crossorigin="anonymous">', '')
 script = (static / 'app.js').read_text()
 # Use registered works when available. Until then, show neutral layout frames,
@@ -54,7 +55,7 @@ encoded_notes = json.dumps(series_notes, ensure_ascii=False).replace('<', '\\u00
 html = html.replace('</head>', '<script id="series-note-seed" type="application/json">' + encoded_notes + '</script></head>')
 html = html.replace('</head>', '<script id="exhibition-seed" type="application/json">' + encoded_exhibitions + '</script></head>')
 html = html.replace('<p id="upload-status"', '<p id="upload-storage-note" class="muted" role="status"></p><button id="backup-works" type="button" class="quiet">작품 백업 ↓</button><button id="restore-works" type="button" class="quiet">백업 불러오기 ↑</button><input id="restore-file" type="file" accept=".html,.json" hidden><p id="restore-status" class="muted" role="status"></p><p id="upload-status"')
-script = (static / 'gallery-rules.js').read_text() + '\n' + (static / 'gallery-images.js').read_text() + '\n' + (static / 'preview-store.js').read_text() + '\n' + script + '\n' + (static / 'exhibitions.js').read_text() + '\n' + (static / 'contact.js').read_text()
+script = (static / 'gallery-upload.js').read_text() + '\n' + (static / 'gallery-rules.js').read_text() + '\n' + (static / 'gallery-images.js').read_text() + '\n' + (static / 'preview-store.js').read_text() + '\n' + script + '\n' + (static / 'exhibitions.js').read_text() + '\n' + (static / 'contact.js').read_text()
 # Preview hosts can block navigation to sibling files. Keep both views in one
 # document, without iframe loads, network requests, or cross-file navigation.
 exhibitions_source = (static / 'exhibitions.html').read_text()

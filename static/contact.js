@@ -44,9 +44,22 @@
         const text = document.createElement('p'); text.className = 'inbox-text'; text.textContent = message.message;
         const time = document.createElement('time');
         time.textContent = new Intl.DateTimeFormat('ko-KR', {timeZone:'Asia/Seoul',dateStyle:'medium',timeStyle:'short'}).format(new Date(message.created_at.replace(' ', 'T') + 'Z'));
-        item.append(name, reply, text, time); list.append(item);
+        const remove = document.createElement('button');
+        remove.type = 'button'; remove.className = 'delete-action'; remove.textContent = '메모 삭제';
+        remove.addEventListener('click', async () => {
+          if (!inbox.elements.inboxPassword.reportValidity()) return;
+          if (!confirm('이 메모를 삭제할까요? 삭제한 메모는 복구할 수 없습니다.')) return;
+          remove.disabled = true;
+          try {
+            await GalleryUpload.request('/api/messages/delete', {id: message.id}, inbox.elements.inboxPassword.value);
+            item.remove();
+            inboxStatus.textContent = list.children.length ? '' : '남겨진 메모가 없습니다.';
+          } catch (error) { inboxStatus.textContent = error.message; }
+          finally { remove.disabled = false; }
+        });
+        item.append(name, reply, text, time, remove); list.append(item);
       });
     } catch (error) { inboxStatus.textContent = error.message || '메모를 불러오지 못했습니다.'; }
-    finally { inbox.elements.inboxPassword.value = ''; submit.disabled = false; }
+    finally { submit.disabled = false; }
   });
 })();

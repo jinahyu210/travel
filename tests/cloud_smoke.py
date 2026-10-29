@@ -93,6 +93,22 @@ with psycopg.connect(uri) as db:
     assert db.execute("SELECT column_default FROM information_schema.columns WHERE table_name='exhibitions' AND column_name='image'").fetchone() is not None
     assert db.execute("SELECT relrowsecurity FROM pg_class WHERE relname='messages'").fetchone()[0]
     assert not db.execute("SELECT has_table_privilege('anon','messages','SELECT')").fetchone()[0]
+# Large uploads use a signed reference, never a >4.5MB function request.
+with patch('cloud_backend.sign_upload', return_value='https://example.supabase.co/signed'):
+    assert call('images/sign', {'size': 10_000_000})[0] == 401
+    assert call('images/sign', {'size': 10_000_001}, True)[0] == 400
+    status, signed = call('images/sign', {'size': 10_000_000}, True)
+    assert status == 200 and signed['direct']
+raw = b'\xff\xd8\xff' + b'\0' * (10_000_000 - 3)
+with patch('cloud_backend.read_upload', return_value=raw), patch('cloud_backend.remove_upload') as cleanup:
+    status, large = call('artworks', {**payload, 'image': {'upload_token': signed['upload_token']}}, True)
+    assert status == 201, (status, large)
+    cleanup.assert_called_once()
+for route, identifier in [('artworks', large['id']), ('exhibitions', exhibition['id']), ('messages', call('messages', admin=True)[1][0]['id'])]:
+    assert call(route + '/delete', {'id': identifier})[0] == 401
+    assert call(route + '/delete', {'id': identifier}, True)[0] == 200
+    assert call(route + '/delete', {'id': identifier}, True)[0] == 404
+assert call('series-notes')[1] == {'관계': '작가노트'}
 http.shutdown()
 pg.cleanup()
-print('PostgreSQL + rewritten Vercel API: create/read/edit/rename/notes/exhibitions/private messages, 3-query cold gallery fast path, and privacy repair passed. Storage upload mocked.')
+print('PostgreSQL + rewritten Vercel API: CRUD, signed 10MB upload, deletion auth, 3-query cold gallery fast path, and privacy repair passed. Storage upload mocked.')

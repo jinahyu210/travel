@@ -117,23 +117,52 @@ def storage_request(path, data, method='POST', mime='application/json'):
         return response.read()
 
 
-def save_image(filename, raw, mime):
+def ensure_bucket(name='gallery-artworks', private=False):
+    config = {'public': not private, 'file_size_limit': 10_000_000,
+              'allowed_mime_types': (None if private else ['image/png', 'image/jpeg', 'image/webp'])}
     # Existing buckets respond 400/409. Check the bucket rather than swallowing errors.
     try:
-        storage_request('bucket/gallery-artworks', None, 'GET')
+        current = json.loads(storage_request('bucket/' + name, None, 'GET'))
     except HTTPError as error:
         if error.code not in (400, 404):
             raise
         try:
             storage_request('bucket', json.dumps({
-                'id': 'gallery-artworks', 'name': 'gallery-artworks', 'public': True,
-                'file_size_limit': 3000000,
-                'allowed_mime_types': ['image/png', 'image/jpeg', 'image/webp']
+                'id': name, 'name': name, **config
             }).encode())
         except HTTPError as conflict:
             if conflict.code not in (400, 409):
                 raise
-            storage_request('bucket/gallery-artworks', None, 'GET')
+            current = json.loads(storage_request('bucket/' + name, None, 'GET'))
+        else:
+            return
+    if any(current.get(key) != value for key, value in config.items()):
+        storage_request('bucket/' + name, json.dumps(config).encode(), 'PUT')
+
+
+def sign_upload(filename):
+    ensure_bucket('gallery-uploads', private=True)
+    result = json.loads(storage_request('object/upload/sign/gallery-uploads/' + filename, b'{}'))
+    # Build the destination ourselves; never expose the service credential.
+    from urllib.parse import parse_qs, quote
+    token = parse_qs(urlsplit(result['url']).query)['token'][0]
+    return supabase_url() + '/storage/v1/object/upload/sign/gallery-uploads/' + filename + '?token=' + quote(token, safe='')
+
+
+def read_upload(filename):
+    key = service_key()
+    request = Request(supabase_url() + '/storage/v1/object/authenticated/gallery-uploads/' + filename,
+                      headers={'Authorization': 'Bearer ' + key, 'apikey': key})
+    with urlopen(request, timeout=45) as response:
+        return response.read(10_000_001)
+
+
+def remove_upload(filename):
+    storage_request('object/gallery-uploads', json.dumps({'prefixes': [filename]}).encode(), 'DELETE')
+
+
+def save_image(filename, raw, mime):
+    ensure_bucket()
     storage_request('object/gallery-artworks/' + filename, raw, mime=mime)
     return supabase_url() + '/storage/v1/object/public/gallery-artworks/' + filename
 

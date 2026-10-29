@@ -261,3 +261,16 @@ select:focus {
     display: inline;
   }
 }
+
+.delete-action {
+  display: block;
+  width: auto;
+  margin: 24px 0;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: #9b402c;
+  font-size: 14px;
+}
+.delete-action[hidden] { display: none; }

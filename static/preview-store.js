@@ -93,6 +93,14 @@
   }
   window.galleryStore = {
     list: read,
+    async remove(id) {
+      await ready;
+      await commit({...snapshot(), works: works.filter(item => item.id !== id)});
+    },
+    async removeExhibition(id) {
+      await ready;
+      await commit({...snapshot(), exhibitions: exhibitions.filter(item => item.id !== id)});
+    },
     listExhibitions: readExhibitions,
     async listNotes() { await ready; return seriesNotes; },
     showNotice: notice,

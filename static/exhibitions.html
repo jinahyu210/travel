@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="./exhibitions.css">
   <script defer src="./gallery-rules.js"></script>
   <script defer src="./gallery-images.js"></script>
+  <script defer src="./gallery-upload.js"></script>
   <script defer src="./exhibitions.js"></script>
 <link rel="preload" href="/api/exhibitions" as="fetch" crossorigin="anonymous"></head>
 <body class="exhibitions-page">
@@ -52,7 +53,7 @@
       <label>관리자 비밀번호<input name="exhibitionPassword" type="password" autocomplete="current-password" required></label>
       <label><span id="exhibition-image-label">대표 이미지 (선택)</span>
         <input id="exhibition-image-input" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif" aria-describedby="exhibition-image-help">
-        <small id="exhibition-image-help">JPG, PNG, WebP, HEIC · 최대 3MB</small>
+        <small id="exhibition-image-help">JPG, PNG, WebP, HEIC · 최대 10MB</small>
       </label>
       <img id="exhibition-current-image" alt="현재 전시 대표 이미지" hidden>
       <label>전시명<input name="title" maxlength="200" required></label>
@@ -64,6 +65,7 @@
       <p class="muted">한국 시간 기준 · 종료일 다음 날부터 지난 전시에 표시됩니다.</p>
       <label>전시 소개<textarea name="description" maxlength="2000" rows="3"></textarea></label>
       <p id="exhibition-form-status" role="status"></p>
+      <button id="delete-exhibition" type="button" class="delete-action" hidden>전시 삭제</button>
       <button id="exhibition-submit" type="submit" class="primary">전시 저장하기</button>
     </form>
   </dialog>

@@ -218,7 +218,16 @@ function artworkCard(artwork, open, priority = false) {
   const title = document.createElement('h3'); title.textContent = artwork.title;
   const year = document.createElement('p'); year.className = 'caption-year'; year.textContent = artwork.year || '';
   const caption = document.createElement('div'); caption.className = 'card-caption'; caption.append(title, year);
-  ['medium', 'dimensions', 'canvas_size', 'price'].forEach(key => {
+  if (artwork.medium || artwork.dimensions) {
+    const specs = document.createElement('div'); specs.className = 'caption-specs';
+    for (const key of ['medium', 'dimensions']) {
+      const line = document.createElement('p'); line.className = 'caption-' + key;
+      line.textContent = artwork[key] || '';
+      specs.append(line);
+    }
+    caption.append(specs);
+  }
+  ['canvas_size', 'price'].forEach(key => {
     if (!artwork[key]) return;
     const line = document.createElement('p'); line.className = 'caption-extra caption-' + key;
     line.textContent = artwork[key]; caption.append(line);

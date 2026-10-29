@@ -164,11 +164,36 @@ label small {
 }
 
 /* Keep the shared page frame aligned across Works, Exhibitions, and Contact. */
+html {
+  scrollbar-gutter: stable;
+}
+@supports not (scrollbar-gutter: stable) {
+  html { overflow-y: scroll; }
+}
 :root {
   --page-gutter: 5vw;
   --page-rule: #e9e9e9;
   --surface-hover: #fafafa;
   --focus-color: #666;
+}
+
+/* Active links and the Works admin button must occupy identical nav heights. */
+.site-nav > a,
+.site-nav > button,
+.site-nav > .quiet {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.site-nav > a[aria-current] {
+  border-bottom-color: currentColor;
 }
 
 body > header,
@@ -274,3 +299,29 @@ select:focus {
   font-size: 14px;
 }
 .delete-action[hidden] { display: none; }
+
+/* Pair the material and dimensions beneath the title/year on artwork cards. */
+#grid .card-caption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+#grid .card-caption .caption-year { text-align: right; }
+.card-caption .caption-specs {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+}
+.card-caption .caption-specs p {
+  min-width: 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.card-caption .caption-specs .caption-dimensions { text-align: right; }
+#series-gallery .caption-specs { margin-top: 6px; }
+#grid .card-caption:has(h3:empty):has(.caption-year:empty):not(:has(.caption-specs)) {
+  display: none;
+}

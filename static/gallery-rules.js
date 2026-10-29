@@ -8,18 +8,27 @@
     [30,90.9,72.7,65.1,60.6],[40,100,80.3,72.7,65.1],[50,116.8,91,80.3,72.7],
     [60,130.3,97,89.4,80.3],[80,145.5,112.1,97,89.4],[100,162.2,130.3,112.1,97]
   ];
-  const canvasFormats = sizes.flatMap(([number, width, f, p, m]) =>
-    [['F', f], ['P', p], ['M', m], ['S', width]].map(([type, height]) =>
-      Object.freeze({label: `${number}호 ${type}`, number, type, width, height})));
+  // Korean S sizes are a separate square chart, not the F long side.
+  // 0호 S has no entry in this chart; custom dimensions remain available.
+  const squareSides = new Map([
+    [1,15.8],[2,17.9],[3,22],[4,24.2],[5,27.3],[6,31.8],[8,37.9],
+    [10,45.5],[12,50],[15,53],[20,60.6],[25,65.1],[30,72.7],[40,80.3],
+    [50,91],[60,97],[80,112.1],[100,130.3]
+  ]);
+  const canvasFormats = sizes.flatMap(([number, width, f, p, m]) => {
+    const formats = [['F', f], ['P', p], ['M', m]].map(([type, height]) =>
+      ({label: `${number}호 ${type}`, number, type, width, height}));
+    if (squareSides.has(number)) {
+      const side = squareSides.get(number);
+      formats.push({label: `${number}호 S`, number, type: 'S', width: side, height: side});
+    }
+    return formats.map(Object.freeze);
+  });
   function canvasSize(width, height) {
     if (!(Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0)) return '';
     const long = Math.max(width, height), short = Math.min(width, height);
-    for (const [number, edge, ...shorts] of sizes) {
-      if (Math.abs(long - edge) > .15) continue;
-      if (Math.abs(short - edge) <= .15) return `${number}호 S`;
-      for (let index = 0; index < shorts.length; index++) {
-        if (Math.abs(short - shorts[index]) <= .15) return `${number}호 ${['F','P','M'][index]}`;
-      }
+    for (const format of canvasFormats) {
+      if (Math.abs(long - format.width) <= .15 && Math.abs(short - format.height) <= .15) return format.label;
     }
     return '비규격';
   }

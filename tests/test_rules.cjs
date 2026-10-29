@@ -10,7 +10,7 @@ test('canvas matches F, P, M standards regardless of orientation', () => {
   assert.equal(canvasSize(72.7, 60.6), '20호 F');
   assert.equal(canvasSize(116.8, 91), '50호 F');
   assert.equal(canvasSize(162.2, 130.3), '100호 F');
-  assert.equal(canvasSize(53, 53), '10호 S');
+  assert.equal(canvasSize(45.5, 45.5), '10호 S');
 });
 test('canvas allows millimetre rounding without guessing custom dimensions', () => {
   assert.equal(canvasSize(90.9, 72.8), '30호 F');
@@ -42,7 +42,7 @@ test('every selectable format matches its dimensions in either orientation', () 
   }
 });
 
-test('dropdown dimensions match the Korean 0–100 canvas chart exactly', () => {
+test('F/P/M dropdown dimensions match the Korean 0–100 canvas chart exactly', () => {
   const {canvasFormats} = require('../static/gallery-rules.js');
   const rows = [
     [0,18,14,12,10],[1,22.7,15.8,14,12],[2,25.8,17.9,16,14],[3,27.3,22,19,16],
@@ -53,9 +53,27 @@ test('dropdown dimensions match the Korean 0–100 canvas chart exactly', () => 
     [60,130.3,97,89.4,80.3],[80,145.5,112.1,97,89.4],[100,162.2,130.3,112.1,97]
   ];
   const expected = rows.flatMap(([number,long,f,p,m]) =>
-    [['F',f],['P',p],['M',m],['S',long]].map(([type,short]) =>
+    [['F',f],['P',p],['M',m]].map(([type,short]) =>
       [`${number}호 ${type}`,long,short]));
-  assert.deepEqual(canvasFormats.map(({label,width,height}) => [label,width,height]), expected);
+  assert.deepEqual(canvasFormats.filter(format => format.type !== 'S').map(({label,width,height}) => [label,width,height]), expected);
+});
+
+test('Korean square sizes use their own chart for selection and dimension recognition', () => {
+  const {canvasFormats} = require('../static/gallery-rules.js');
+  const squares = [[1,15.8],[2,17.9],[3,22],[4,24.2],[5,27.3],[6,31.8],[8,37.9],
+    [10,45.5],[12,50],[15,53],[20,60.6],[25,65.1],[30,72.7],[40,80.3],
+    [50,91],[60,97],[80,112.1],[100,130.3]];
+  for (const [number, side] of squares) {
+    const format = canvasFormats.find(format => format.label === `${number}호 S`);
+    assert.deepEqual([format.width, format.height], [side, side]);
+    assert.equal(canvasSize(side, side), `${number}호 S`);
+  }
+  assert.equal(canvasSize(60.6, 60.6), '20호 S');
+  assert.equal(canvasSize(72.7, 72.7), '30호 S');
+  assert.equal(canvasSize(53, 53), '15호 S');
+  assert.equal(canvasSize(90.9, 90.9), '50호 S');
+  assert.equal(canvasFormats.some(format => format.label === '0호 S'), false);
+  assert.equal(canvasSize(19, 19), '비규격');
 });
 
 test('legacy manufacturer rounding still resolves to the corrected size', () => {

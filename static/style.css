@@ -195,6 +195,9 @@ html {
 .site-nav > a[aria-current] {
   border-bottom-color: currentColor;
 }
+.site-nav > .quiet {
+  margin-left: clamp(8px, 1vw, 16px);
+}
 
 body > header,
 body > footer,

@@ -164,6 +164,13 @@ label small {
 }
 
 /* Keep the shared page frame aligned across Works, Exhibitions, and Contact. */
+html:not([data-admin="true"]) [data-admin-only] {
+  display: none !important;
+}
+#admin-login-status {
+  color: #9b402c;
+  font-size: 13px;
+}
 html {
   scrollbar-gutter: stable;
 }

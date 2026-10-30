@@ -112,6 +112,7 @@
   }
 
   function openRegistration(item = null) {
+    if (!GalleryAdmin.require(() => openRegistration(item))) return;
     form.reset();
     editingExhibition = item;
     document.getElementById('delete-exhibition').hidden = !item;
@@ -143,6 +144,7 @@
     if (allowRegistration) {
       const add = element('button', 'quiet', '전시 등록 ↗');
       add.id = 'exhibition-add';
+      add.dataset.adminOnly = '';
       add.type = 'button';
       add.addEventListener('click', () => openRegistration());
       labelGroup.append(add);

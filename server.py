@@ -15,6 +15,7 @@ from datetime import date
 from contextlib import contextmanager
 from threading import Lock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie, CookieError
 from urllib.parse import urlsplit
 from urllib.error import HTTPError, URLError
 
@@ -78,6 +79,31 @@ else:
         return db
 if not PASSWORD:
     raise RuntimeError('Administrator password must not be empty')
+
+ADMIN_COOKIE = '__Host-gallery_admin' if CLOUD else 'gallery_admin'
+ADMIN_SESSION_SECONDS = 8 * 60 * 60
+
+
+def admin_session_signature(value):
+    return hmac.new(PASSWORD.encode(), ('gallery-admin-session:' + value).encode(), hashlib.sha256).hexdigest()
+
+
+def admin_session_expiry(cookie_header):
+    try:
+        cookies = SimpleCookie(cookie_header)
+        token = cookies[ADMIN_COOKIE].value
+        if not re.fullmatch(r'[0-9]{10}\.[0-9a-f]{32}\.[0-9a-f]{64}', token):
+            return 0
+        expiry, nonce, signature = token.split('.')
+        if int(expiry) <= time.time() or not hmac.compare_digest(signature, admin_session_signature(expiry + '.' + nonce)):
+            return 0
+        return int(expiry)
+    except (KeyError, ValueError, CookieError):
+        return 0
+
+
+def admin_cookie(token='', max_age=0):
+    return f'{ADMIN_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}' + ('; Secure' if CLOUD else '')
 
 def initialize_database(db):
     if CLOUD and schema_ready(db):
@@ -247,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
         # Do not log request headers, passwords, or image data.
         super().log_message(fmt, *args)
 
-    def respond(self, status, body, content_type='application/json; charset=utf-8', cache_control='no-store'):
+    def respond(self, status, body, content_type='application/json; charset=utf-8', cache_control='no-store', extra_headers=None):
         if isinstance(body, (dict, list)):
             body = json.dumps(body, ensure_ascii=False, separators=(',', ':')).encode()
         etag = None
@@ -262,6 +288,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Content-Length', str(len(body)))
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Cache-Control', cache_control)
+        for name, value in (extra_headers or {}).items():
+            self.send_header(name, value)
         if etag:
             self.send_header('ETag', etag)
         image_source = urlsplit(os.environ.get('SUPABASE_URL', '')).netloc
@@ -274,6 +302,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlsplit(self.path).path
         public_cache = 'public, max-age=0, must-revalidate'
+        if path == '/api/admin/session':
+            expiry = admin_session_expiry(self.headers.get('Cookie', ''))
+            return self.respond(200, {'authenticated': bool(expiry), 'expiresAt': expiry * 1000})
         if path == '/api/gallery':
             with database() as db:
                 rows = [dict(row) for row in db.execute('SELECT * FROM artworks ORDER BY created_at DESC, rowid DESC')]
@@ -301,7 +332,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, rows, cache_control=public_cache)
         static = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
         static.update({'/exhibitions': ('exhibitions.html', 'text/html; charset=utf-8'), '/exhibitions.html': ('exhibitions.html', 'text/html; charset=utf-8'), '/exhibitions.css': ('exhibitions.css', 'text/css; charset=utf-8')})
-        static.update({f'/{name}': (name, 'text/javascript; charset=utf-8') for name in ['gallery-rules.js', 'gallery-images.js', 'gallery-upload.js', 'exhibitions.js']})
+        static.update({f'/{name}': (name, 'text/javascript; charset=utf-8') for name in ['gallery-rules.js', 'gallery-images.js', 'gallery-upload.js', 'gallery-admin.js', 'exhibitions.js']})
         static.update({'/contact': ('contact.html', 'text/html; charset=utf-8'), '/contact.html': ('contact.html', 'text/html; charset=utf-8')})
         static['/contact.js'] = ('contact.js', 'text/javascript; charset=utf-8')
         if path in static:
@@ -320,6 +351,21 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(404, {'error': '찾을 수 없습니다.'})
 
     def do_POST(self):
+        if self.path in ['/api/admin/login', '/api/admin/logout']:
+            origin = self.headers.get('Origin')
+            if (self.headers.get('Sec-Fetch-Site') == 'cross-site' or
+                    (origin and urlsplit(origin).netloc != self.headers.get('Host'))):
+                return self.respond(403, {'error': '같은 사이트에서 다시 로그인해 주세요.'})
+            if self.path == '/api/admin/logout':
+                return self.respond(200, {'authenticated': False}, extra_headers={'Set-Cookie': admin_cookie()})
+            supplied = self.headers.get('Authorization', '').removeprefix('Bearer ')
+            if not hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), hashlib.sha256(PASSWORD.encode()).digest()):
+                return self.respond(401, {'error': '관리자 비밀번호를 확인해 주세요.'})
+            expiry = int(time.time()) + ADMIN_SESSION_SECONDS
+            value = str(expiry) + '.' + secrets.token_hex(16)
+            token = value + '.' + admin_session_signature(value)
+            return self.respond(200, {'authenticated': True, 'expiresAt': expiry * 1000},
+                                extra_headers={'Set-Cookie': admin_cookie(token, ADMIN_SESSION_SECONDS)})
         if self.path == '/api/messages':
             try:
                 size = int(self.headers.get('Content-Length', '0'))

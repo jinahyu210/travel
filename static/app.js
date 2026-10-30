@@ -331,6 +331,7 @@ async function load(fresh = false) {
   } catch { if (!galleryLoaded) { $('status').hidden = false; $('status').textContent = '작품을 불러오지 못했습니다. 새로고침해 주세요.'; } }
 }
 async function openArtworkForm(artwork = null) {
+  if (!GalleryAdmin.require(() => openArtworkForm(artwork))) return;
   const form = $('upload-form');
   canvasSelect.querySelectorAll('[data-legacy]').forEach(option => option.remove());
   form.reset();
@@ -386,6 +387,7 @@ $('delete-artwork').addEventListener('click', async () => {
   finally { button.disabled = false; form.querySelector('[type=submit]').disabled = false; }
 });
 function openNoteEditor(name) {
+  if (!GalleryAdmin.require(() => openNoteEditor(name))) return;
   $('note-status').textContent = '';
   $('note-series-select').value = name || '';
   $('note-editor').value = noteFor(name || '');
@@ -506,11 +508,12 @@ if (!window.galleryStore) {
     }
   } catch {}
 }
-load().then(() => {
+load().then(async () => {
   const url = new URL(window.location.href);
   if (url.searchParams.get('register') === '1') {
     url.searchParams.delete('register');
     history.replaceState(null, '', url);
+    await GalleryAdmin.ready;
     openArtworkForm();
   }
 });

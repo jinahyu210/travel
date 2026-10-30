@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="./exhibitions.css">
   <script defer src="./gallery-rules.js"></script>
   <script defer src="./gallery-images.js"></script>
-  <script defer src="./gallery-upload.js"></script>
+  <script defer src="./gallery-upload.js"></script><script defer src="./gallery-admin.js"></script>
   <script defer src="./exhibitions.js"></script>
 <link rel="preload" href="/api/exhibitions" as="fetch" crossorigin="anonymous"></head>
 <body class="exhibitions-page">
@@ -19,8 +19,8 @@
       <a href="/">Works</a>
       <a href="/exhibitions" aria-current="page">Exhibitions</a>
       <a href="/contact">Contact</a>
-      <a href="/?register=1" class="quiet">관리자 · 작품 등록 ↗</a>
-    </nav>
+      <a href="/?register=1" class="quiet" data-admin-only>관리자 · 작품 등록 ↗</a>
+    <button type="button" class="quiet" data-admin-toggle>관리자 로그인</button></nav>
   </header>
 
   <main>
@@ -44,7 +44,7 @@
     <span class="footer-copyright">© 2026 Park Hyun Sook. All rights reserved.</span>
   </footer>
 
-  <dialog id="exhibition-dialog">
+  <dialog data-admin-dialog id="exhibition-dialog">
     <form id="exhibition-form">
       <div class="dialog-head">
         <h2 id="exhibition-form-title">전시 등록</h2>
@@ -65,7 +65,7 @@
       <p class="muted">한국 시간 기준 · 종료일 다음 날부터 지난 전시에 표시됩니다.</p>
       <label>전시 소개<textarea name="description" maxlength="2000" rows="3"></textarea></label>
       <p id="exhibition-form-status" role="status"></p>
-      <button id="delete-exhibition" type="button" class="delete-action" hidden>전시 삭제</button>
+      <button id="delete-exhibition" data-admin-only type="button" class="delete-action" hidden>전시 삭제</button>
       <button id="exhibition-submit" type="submit" class="primary">전시 저장하기</button>
     </form>
   </dialog>
@@ -94,7 +94,7 @@
           </div>
         </dl>
         <p id="exhibition-detail-description" class="exhibition-detail-description"></p>
-        <button id="edit-exhibition" type="button" class="quiet">전시 편집 ↗</button>
+        <button id="edit-exhibition" data-admin-only type="button" class="quiet">전시 편집 ↗</button>
       </div>
     </div>
   </dialog>

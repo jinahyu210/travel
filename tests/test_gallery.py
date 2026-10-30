@@ -60,6 +60,42 @@ class GalleryTest(unittest.TestCase):
     def artwork(self, **changes):
         return dict(title='고요한 아침', artist='김화가', year='2026', description='<script>untrusted</script>', image=base64.b64encode(PNG).decode(), **changes)
 
+    def test_admin_login_session_and_logout_do_not_replace_action_passwords(self):
+        status, body, headers = self.request('/api/admin/session')
+        self.assertEqual(status, 200)
+        self.assertFalse(json.loads(body)['authenticated'])
+        self.assertEqual(headers['Cache-Control'], 'no-store')
+        self.assertIsNone(headers['ETag'])
+        status, _, headers = self.request('/api/admin/login', {}, 'wrong')
+        self.assertEqual(status, 401)
+        self.assertIsNone(headers.get('Set-Cookie'))
+        status, body, headers = self.request('/api/admin/login', {}, 'test-only-password')
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)['authenticated'])
+        self.assertGreater(json.loads(body)['expiresAt'], time.time() * 1000)
+        cookie = headers['Set-Cookie'].split(';')[0]
+        self.assertIn('HttpOnly', headers['Set-Cookie'])
+        self.assertIn('SameSite=Strict', headers['Set-Cookie'])
+        self.assertNotIn('test-only-password', cookie)
+        session_headers = {'Cookie': cookie}
+        self.assertTrue(json.loads(self.request('/api/admin/session', headers=session_headers)[1])['authenticated'])
+        # A session only reveals controls; mutations/private reads still require the password.
+        self.assertEqual(self.request('/api/artworks', self.artwork(), headers=session_headers)[0], 401)
+        self.assertEqual(self.request('/api/artworks/delete', {'id': 'missing'}, headers=session_headers)[0], 401)
+        self.assertEqual(self.request('/api/messages', headers=session_headers)[0], 401)
+        self.assertEqual(self.request('/api/artworks', self.artwork(), 'test-only-password', session_headers)[0], 201)
+        self.assertFalse(json.loads(self.request('/api/admin/session', headers={'Cookie': cookie + 'x'})[1])['authenticated'])
+        status, body, headers = self.request('/api/admin/logout', {}, headers=session_headers)
+        self.assertEqual(status, 200)
+        self.assertFalse(json.loads(body)['authenticated'])
+        self.assertIn('Max-Age=0', headers['Set-Cookie'])
+        self.assertFalse(json.loads(self.request('/api/admin/session', headers={'Cookie': headers['Set-Cookie'].split(';')[0]})[1])['authenticated'])
+
+    def test_admin_session_rejects_cross_origin_login_and_logout(self):
+        for path in ['/api/admin/login', '/api/admin/logout']:
+            self.assertEqual(self.request(path, {}, 'test-only-password', {'Origin': 'https://another.example'})[0], 403)
+        self.assertEqual(self.request('/api/admin/login', {}, 'test-only-password', {'Origin': self.url})[0], 200)
+
     def test_gallery_bundle_revalidates_after_edits_without_exposing_messages(self):
         payload = self.artwork(series='관계')
         status, created, _ = self.request('/api/artworks', payload, 'test-only-password')

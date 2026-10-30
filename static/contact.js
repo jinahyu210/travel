@@ -23,9 +23,11 @@
   const inbox = document.getElementById('inbox-form');
   const list = document.getElementById('inbox-messages');
   const inboxStatus = document.getElementById('inbox-status');
-  document.getElementById('inbox-open').addEventListener('click', () => {
+  function openInbox() {
+    if (!GalleryAdmin.require(openInbox)) return;
     inboxStatus.textContent = ''; list.replaceChildren(); dialog.showModal();
-  });
+  }
+  document.getElementById('inbox-open').addEventListener('click', openInbox);
   dialog.querySelector('.close').addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => { inbox.reset(); list.replaceChildren(); inboxStatus.textContent = ''; });
   inbox.addEventListener('submit', async event => {
@@ -36,6 +38,7 @@
       const response = await fetch('/api/messages', {headers:{Authorization:`Bearer ${inbox.elements.inboxPassword.value}`}});
       const messages = await response.json();
       if (!response.ok) throw new Error(messages.error || '메모를 불러오지 못했습니다.');
+      if (!GalleryAdmin.isAuthenticated() || !dialog.open) return;
       inboxStatus.textContent = messages.length ? '' : '아직 남겨진 메모가 없습니다.';
       messages.forEach(message => {
         const item = document.createElement('article'); item.className = 'inbox-item';
@@ -55,11 +58,11 @@
             item.remove();
             inboxStatus.textContent = list.children.length ? '' : '남겨진 메모가 없습니다.';
           } catch (error) { inboxStatus.textContent = error.message; }
-          finally { remove.disabled = false; }
+          finally { inbox.elements.inboxPassword.value = ''; remove.disabled = false; }
         });
         item.append(name, reply, text, time, remove); list.append(item);
       });
     } catch (error) { inboxStatus.textContent = error.message || '메모를 불러오지 못했습니다.'; }
-    finally { submit.disabled = false; }
+    finally { inbox.elements.inboxPassword.value = ''; submit.disabled = false; }
   });
 })();

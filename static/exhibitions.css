@@ -20,19 +20,8 @@
 
 .exhibitions-page .exhibition-intro {
   margin: 0;
-  position: relative;
   border-bottom: 0;
   padding-inline: var(--page-gutter);
-}
-
-.exhibitions-page .exhibition-intro::after {
-  content: "";
-  position: absolute;
-  right: var(--page-gutter);
-  bottom: 0;
-  left: var(--page-gutter);
-  height: 1px;
-  background: var(--page-rule);
 }
 
 .exhibition-section {
@@ -106,9 +95,9 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 32px;
-  min-height: 126px;
+  min-height: 92px;
   margin: 0;
-  padding: 34px 0 16px;
+  padding: 14px 0 18px;
   border-bottom: 1px solid var(--archive-line);
 }
 
@@ -137,7 +126,7 @@
 .archive-year-head h3,
 .archive-year-heading h3 {
   margin: 0;
-  font-size: clamp(46px, 6vw, 82px);
+  font-size: clamp(36px, 4.2vw, 60px);
   font-weight: 400;
   line-height: .88;
   letter-spacing: -.06em;
@@ -344,7 +333,6 @@
 .archive-error {
   margin: 0;
   padding: 34px 0;
-  border-bottom: 1px solid var(--archive-line);
   color: var(--archive-muted);
   font-size: 12px;
 }
@@ -577,13 +565,13 @@
 
   .archive-year-head,
   .archive-year-heading {
-    min-height: 96px;
-    padding: 26px 0 12px;
+    min-height: 80px;
+    padding: 12px 0 14px;
   }
 
   .archive-year-head h3,
   .archive-year-heading h3 {
-    font-size: 44px;
+    font-size: 40px;
   }
 
   .archive-row {

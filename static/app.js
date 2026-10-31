@@ -215,20 +215,17 @@ function artworkCard(artwork, open, priority = false) {
   const img = document.createElement('img'); img.alt = artwork.title;
   GalleryImages.setSource(img, artwork.image, {priority});
   imageFrame.append(img);
-  const title = document.createElement('h3'); title.textContent = artwork.title;
-  const year = document.createElement('p'); year.className = 'caption-year'; year.textContent = artwork.year || '';
-  const caption = document.createElement('div'); caption.className = 'card-caption'; caption.append(title, year);
-  if (artwork.medium || artwork.dimensions || artwork.canvas_size) {
-    const specs = document.createElement('div'); specs.className = 'caption-specs';
-    for (const key of ['medium', 'dimensions']) {
-      const line = document.createElement('p'); line.className = 'caption-' + key;
-      line.textContent = artwork[key] || '';
-      if (key === 'dimensions' && artwork.canvas_size) {
-        line.textContent += `${line.textContent ? ' ' : ''}(${artwork.canvas_size})`;
-      }
-      specs.append(line);
-    }
-    caption.append(specs);
+  const title = document.createElement('h3'); title.textContent = (artwork.title || '').replace(/\s*_\s*/g, ' — ');
+  const caption = document.createElement('div'); caption.className = 'card-caption'; caption.append(title);
+  const context = [artwork.year, artwork.medium].filter(Boolean).join(' · ');
+  if (context) {
+    const line = document.createElement('p'); line.className = 'caption-context';
+    line.textContent = context; caption.append(line);
+  }
+  if (artwork.dimensions || artwork.canvas_size) {
+    const line = document.createElement('p'); line.className = 'caption-dimensions';
+    line.textContent = [artwork.dimensions, artwork.canvas_size ? `(${artwork.canvas_size})` : ''].filter(Boolean).join(' ');
+    caption.append(line);
   }
   ['price'].forEach(key => {
     if (!artwork[key]) return;

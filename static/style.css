@@ -313,31 +313,34 @@ select:focus {
 }
 .delete-action[hidden] { display: none; }
 
-/* Pair the material and dimensions beneath the title/year on artwork cards. */
-#grid .card-caption {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 6px 12px;
+/* Keep artwork captions on one shared reading axis. */
+#grid .card-caption,
+#series-gallery .card-caption {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  text-align: left;
 }
-#grid .card-caption .caption-year { text-align: right; }
-.card-caption .caption-specs {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: baseline;
-  gap: 12px;
+#grid .card-caption h3,
+#series-gallery .card-caption h3 {
+  margin: 0 0 5px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
 }
-.card-caption .caption-specs p {
-  min-width: 0;
-  line-height: 1.55;
+#grid .card-caption p,
+#series-gallery .card-caption p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--muted);
+  text-align: left;
+  white-space: normal;
   overflow-wrap: anywhere;
 }
-.card-caption .caption-specs .caption-dimensions { text-align: right; }
-#series-gallery .caption-specs { margin-top: 6px; }
-#grid .card-caption:has(h3:empty):has(.caption-year:empty):not(:has(.caption-specs)) {
-  display: none;
-}
+#grid .card-caption:has(h3:empty):not(:has(p)) { display: none; }
 
 .admin-inbox {
   margin: 0 var(--page-gutter) 80px;

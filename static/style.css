@@ -418,3 +418,35 @@ select:focus {
   .admin-inbox,
   .exhibitions-page .archive-section { padding: 16px; }
 }
+
+/* Trace only occupied cells, leaving an incomplete final row open. */
+#grid { outline: none; border: 0; }
+#grid > .card,
+#grid > .series-title {
+  --edge-top: 0px;
+  --edge-right: 0px;
+  --edge-bottom: 0px;
+  --edge-left: 0px;
+  box-shadow: inset 0 var(--edge-top) var(--content-frame),
+    inset var(--edge-right) 0 var(--content-frame),
+    inset 0 var(--edge-bottom) var(--content-frame),
+    inset var(--edge-left) 0 var(--content-frame);
+}
+@media(min-width:1001px) {
+  #grid > :nth-child(-n+4) { --edge-top: 2px; }
+  #grid > :nth-child(4n+1) { --edge-left: 2px; }
+  #grid > :nth-child(4n), #grid > :last-child { --edge-right: -2px; }
+  #grid > :nth-last-child(-n+4) { --edge-bottom: -2px; }
+}
+@media(min-width:701px) and (max-width:1000px) {
+  #grid > :nth-child(-n+3) { --edge-top: 2px; }
+  #grid > :nth-child(3n+1) { --edge-left: 2px; }
+  #grid > :nth-child(3n), #grid > :last-child { --edge-right: -2px; }
+  #grid > :nth-last-child(-n+3) { --edge-bottom: -2px; }
+}
+@media(max-width:700px) {
+  #grid > :nth-child(-n+2) { --edge-top: 2px; }
+  #grid > :nth-child(2n+1) { --edge-left: 2px; }
+  #grid > :nth-child(2n), #grid > :last-child { --edge-right: -2px; }
+  #grid > :nth-last-child(-n+2) { --edge-bottom: -2px; }
+}

@@ -676,3 +676,21 @@
     transition: none;
   }
 }
+
+/* The current and past archives share one frame, with space between groups. */
+.exhibition-archive {
+  margin: 0 var(--page-gutter) 72px;
+  padding: 24px;
+  border: 2px solid var(--content-frame);
+}
+.exhibition-archive > .archive-section {
+  margin: 0;
+  padding: 0;
+}
+.exhibition-archive > .archive-section + .archive-section {
+  margin-top: 48px;
+}
+@media(max-width:700px) {
+  .exhibition-archive { padding: 16px; margin-bottom: 48px; }
+  .exhibition-archive > .archive-section + .archive-section { margin-top: 32px; }
+}

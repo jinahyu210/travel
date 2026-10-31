@@ -400,23 +400,19 @@ select:focus {
   .admin-inbox { margin-bottom: 50px; padding: 12px 0 32px; }
 }
 
-/* Permanent outer frames; inner dividers retain their lighter hierarchy. */
+/* One frame per content area, inside its bounds rather than offset into neighbors. */
 :root { --content-frame: #666; }
-#grid,
 #series-gallery,
-.exhibitions-page .archive-section,
 .contact-panel,
 .admin-inbox {
-  outline: 2px solid var(--content-frame);
-  outline-offset: 5px;
+  outline: none;
+  border: 2px solid var(--content-frame);
 }
 .contact-panel,
 .admin-inbox { padding: 24px; }
-.exhibitions-page .archive-section { padding: 24px; }
 @media(max-width:700px) {
   .contact-panel,
-  .admin-inbox,
-  .exhibitions-page .archive-section { padding: 16px; }
+  .admin-inbox { padding: 16px; }
 }
 
 /* Trace only occupied cells, leaving an incomplete final row open. */

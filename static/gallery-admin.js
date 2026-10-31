@@ -21,6 +21,7 @@
         if (dialog.open) dialog.close();
       });
     }
+    document.dispatchEvent(new CustomEvent('gallery:admin-session', {detail: {authenticated}}));
   }
 
   async function refresh() {

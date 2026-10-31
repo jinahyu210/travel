@@ -316,7 +316,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, notes, cache_control=public_cache)
         if path == '/api/messages':
             supplied = self.headers.get('Authorization', '').removeprefix('Bearer ')
-            if not hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), hashlib.sha256(PASSWORD.encode()).digest()):
+            password_valid = hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), hashlib.sha256(PASSWORD.encode()).digest())
+            if not admin_session_expiry(self.headers.get('Cookie', '')) and not password_valid:
                 return self.respond(401, {'error': '관리자 비밀번호를 확인해 주세요.'})
             with database() as db:
                 rows = [dict(row) for row in db.execute('SELECT * FROM messages ORDER BY created_at DESC, rowid DESC')]

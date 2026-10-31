@@ -167,6 +167,9 @@ label small {
 html:not([data-admin="true"]) [data-admin-only] {
   display: none !important;
 }
+html[data-admin="true"] [data-visitor-only] {
+  display: none !important;
+}
 #admin-login-status {
   color: #9b402c;
   font-size: 13px;
@@ -334,4 +337,38 @@ select:focus {
 #series-gallery .caption-specs { margin-top: 6px; }
 #grid .card-caption:has(h3:empty):has(.caption-year:empty):not(:has(.caption-specs)) {
   display: none;
+}
+
+.admin-inbox {
+  margin: 0 var(--page-gutter) 80px;
+  padding: 14px 0 40px;
+}
+.inbox-heading-row,
+.inbox-heading-title,
+.inbox-item-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.inbox-heading-row,
+.inbox-item-head { justify-content: space-between; }
+.inbox-heading-row {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--page-rule);
+}
+.inbox-heading-title { gap: 12px; }
+#inbox-heading { margin: 0; font-size: clamp(24px, 2.2vw, 32px); }
+#inbox-refresh { padding: 8px 0; }
+#inbox-status:empty { display: none; }
+#inbox-messages .inbox-item:first-child { border-top: 0; }
+.inbox-item-head h3 { margin: 0; overflow-wrap: anywhere; }
+.inbox-item-head time,
+.inbox-reply { color: var(--muted); }
+#inbox-messages .inbox-text { font-size: 14px; line-height: 1.8; }
+#inbox-messages .delete-action { margin: 16px 0 0; }
+#delete-message-preview { white-space: pre-wrap; overflow-wrap: anywhere; }
+#message-delete-status { color: #9b402c; font-size: 13px; }
+@media(max-width:700px) {
+  .admin-inbox { margin-bottom: 50px; padding: 12px 0 32px; }
 }

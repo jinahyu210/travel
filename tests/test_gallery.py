@@ -79,10 +79,18 @@ class GalleryTest(unittest.TestCase):
         self.assertNotIn('test-only-password', cookie)
         session_headers = {'Cookie': cookie}
         self.assertTrue(json.loads(self.request('/api/admin/session', headers=session_headers)[1])['authenticated'])
-        # A session only reveals controls; mutations/private reads still require the password.
+        # A session can read the inbox, but mutations still require the password.
         self.assertEqual(self.request('/api/artworks', self.artwork(), headers=session_headers)[0], 401)
         self.assertEqual(self.request('/api/artworks/delete', {'id': 'missing'}, headers=session_headers)[0], 401)
-        self.assertEqual(self.request('/api/messages', headers=session_headers)[0], 401)
+        self.request('/api/messages', {'message': '로그인 후 조회할 비공개 메모'})
+        status, body, private = self.request('/api/messages', headers=session_headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)[0]['message'], '로그인 후 조회할 비공개 메모')
+        self.assertEqual(private['Cache-Control'], 'no-store')
+        self.assertIsNone(private.get('ETag'))
+        self.assertEqual(self.request('/api/messages')[0], 401)
+        self.assertEqual(self.request('/api/messages', headers={'Cookie': cookie + 'x'})[0], 401)
+        self.assertEqual(self.request('/api/messages/delete', {'id': json.loads(body)[0]['id']}, headers=session_headers)[0], 401)
         self.assertEqual(self.request('/api/artworks', self.artwork(), 'test-only-password', session_headers)[0], 201)
         self.assertFalse(json.loads(self.request('/api/admin/session', headers={'Cookie': cookie + 'x'})[1])['authenticated'])
         status, body, headers = self.request('/api/admin/logout', {}, headers=session_headers)
@@ -90,6 +98,7 @@ class GalleryTest(unittest.TestCase):
         self.assertFalse(json.loads(body)['authenticated'])
         self.assertIn('Max-Age=0', headers['Set-Cookie'])
         self.assertFalse(json.loads(self.request('/api/admin/session', headers={'Cookie': headers['Set-Cookie'].split(';')[0]})[1])['authenticated'])
+        self.assertEqual(self.request('/api/messages', headers={'Cookie': headers['Set-Cookie'].split(';')[0]})[0], 401)
 
     def test_admin_session_rejects_cross_origin_login_and_logout(self):
         for path in ['/api/admin/login', '/api/admin/logout']:

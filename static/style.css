@@ -427,10 +427,12 @@ select:focus {
   --edge-right: 0px;
   --edge-bottom: 0px;
   --edge-left: 0px;
+  border: 0;
   box-shadow: inset 0 var(--edge-top) var(--content-frame),
     inset var(--edge-right) 0 var(--content-frame),
     inset 0 var(--edge-bottom) var(--content-frame),
-    inset var(--edge-left) 0 var(--content-frame);
+    inset var(--edge-left) 0 var(--content-frame),
+    inset -1px 0 var(--page-rule), inset 0 -1px var(--page-rule);
 }
 @media(min-width:1001px) {
   #grid > :nth-child(-n+4) { --edge-top: 2px; }

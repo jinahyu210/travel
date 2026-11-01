@@ -517,3 +517,50 @@ load().then(async () => {
     openArtworkForm();
   }
 });
+
+// Slow, reversible motion without duplicating artwork cards or taking over manual scrolling.
+(() => {
+  const toggle = document.createElement('button');
+  toggle.type = 'button'; toggle.id = 'series-auto';
+  toggle.setAttribute('aria-controls', 'series-gallery');
+  document.querySelector('.series-view-bottom .navigation').prepend(toggle);
+  let enabled = !reducedMotion.matches, direction = 1, pausedUntil = 0;
+  let previous = 0, fraction = 0, hovering = false, touching = false;
+  function label() {
+    toggle.textContent = enabled ? '자동 이동 멈춤' : '자동 이동 시작';
+    toggle.setAttribute('aria-pressed', String(enabled));
+    seriesGallery.classList.toggle('auto-enabled', enabled);
+  }
+  function pause() { pausedUntil = performance.now() + 4000; fraction = 0; }
+  toggle.addEventListener('click', () => { enabled = !enabled; pause(); label(); });
+  reducedMotion.addEventListener('change', () => { enabled = !reducedMotion.matches; label(); });
+  seriesGallery.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') hovering = true; });
+  seriesGallery.addEventListener('pointerleave', () => { hovering = false; pause(); });
+  seriesGallery.addEventListener('pointerdown', () => { touching = true; pause(); });
+  window.addEventListener('pointerup', () => { if (touching) { touching = false; pause(); } });
+  window.addEventListener('pointercancel', () => { touching = false; pause(); });
+  ['wheel', 'keydown'].forEach(type => seriesGallery.addEventListener(type, pause, {passive:true}));
+  ['series-previous', 'series-next', 'series-back'].forEach(id => $(id).addEventListener('click', pause));
+  seriesGallery.addEventListener('focusout', pause);
+  function tick(now) {
+    const elapsed = Math.min(now - previous, 50); previous = now;
+    const rect = seriesGallery.getBoundingClientRect();
+    const max = seriesGallery.scrollWidth - seriesGallery.clientWidth;
+    const moving = enabled && !document.hidden && !$('series-view').hidden && max > 1 &&
+      rect.bottom > 0 && rect.top < innerHeight && !hovering && !touching &&
+      !seriesGallery.contains(document.activeElement) && !document.querySelector('dialog[open]') && now >= pausedUntil;
+    seriesGallery.classList.toggle('auto-moving', moving);
+    if (moving) {
+      fraction += elapsed * 18 / 1000;
+      const step = Math.floor(fraction); fraction -= step;
+      if (step) {
+        seriesGallery.scrollLeft = Math.max(0, Math.min(max, seriesGallery.scrollLeft + step * direction));
+        if (seriesGallery.scrollLeft >= max - 1 || (direction < 0 && seriesGallery.scrollLeft <= 1)) {
+          direction *= -1; pausedUntil = now + 2000;
+        }
+      }
+    } else fraction = 0;
+    requestAnimationFrame(tick);
+  }
+  label(); requestAnimationFrame(tick);
+})();

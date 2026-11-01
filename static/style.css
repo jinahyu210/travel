@@ -399,3 +399,6 @@ select:focus {
 @media(max-width:700px) {
   .admin-inbox { margin-bottom: 50px; padding: 12px 0 32px; }
 }
+
+#series-auto { width: auto; padding: 0 12px; font-size: 12px; }
+#series-gallery.auto-enabled { scroll-snap-type: none; scroll-behavior: auto; }

@@ -249,7 +249,7 @@
     bottom: -20px;
     left: clamp(-21px, -1.2vw, -9px);
     width: 1px;
-    background: #d8d8d4;
+    background: var(--archive-line);
     pointer-events: none;
   }
 }
